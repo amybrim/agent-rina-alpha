@@ -77,10 +77,11 @@ export default function FixDetail() {
 
   return (
     <RinaLayout>
-      <Link href="/app/fixes">
-        <a className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-3">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to fix queue
-        </a>
+      <Link
+        href="/app/fixes"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-3"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to fix queue
       </Link>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>

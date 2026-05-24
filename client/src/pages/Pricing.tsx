@@ -76,7 +76,7 @@ export default function Pricing() {
     <div className="min-h-screen">
       <header className="border-b border-border/60 bg-background/80 backdrop-blur sticky top-0 z-30">
         <div className="container flex items-center justify-between py-4">
-          <Link href="/"><a className="font-display text-2xl tracking-tight">Rina</a></Link>
+          <Link href="/" className="font-display text-2xl tracking-tight">Rina</Link>
           <Button variant="outline" className="bg-background" asChild>
             <a href={isAuthenticated ? "/app" : getLoginUrl("/app")}>
               {isAuthenticated ? "Open Command Center" : "Sign in"}

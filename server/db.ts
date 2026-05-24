@@ -160,7 +160,7 @@ export async function listScansByBusiness(businessId: number, limit = 10) {
 
 export async function getLatestScan(businessId: number) {
   const rows = await listScansByBusiness(businessId, 1);
-  return rows[0];
+  return rows[0] ?? null;
 }
 
 // ── Scores ───────────────────────────────────────────────────────────────
@@ -187,7 +187,7 @@ export async function listScoresByBusiness(businessId: number, limit = 12) {
 
 export async function getLatestScore(businessId: number) {
   const rows = await listScoresByBusiness(businessId, 1);
-  return rows[0];
+  return rows[0] ?? null;
 }
 
 // ── Fixes ────────────────────────────────────────────────────────────────
@@ -264,5 +264,5 @@ export async function listBriefingsByBusiness(businessId: number, limit = 8) {
 
 export async function getLatestBriefing(businessId: number) {
   const rows = await listBriefingsByBusiness(businessId, 1);
-  return rows[0];
+  return rows[0] ?? null;
 }

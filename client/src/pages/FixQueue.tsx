@@ -51,20 +51,18 @@ export default function FixQueue() {
                 </div>
               )}
               {byStatus[status].map((f) => (
-                <Link key={f.id} href={`/app/fixes/${f.id}`}>
-                  <a className="block">
-                    <Card className="rina-card hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="font-medium leading-snug">{f.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1 line-clamp-3">{f.rationale}</div>
-                        <div className="text-[11px] text-muted-foreground mt-3 flex items-center gap-2">
-                          <span className="capitalize">{f.category}</span>
-                          <span>·</span>
-                          <span>+{f.impactPoints} pts</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </a>
+                <Link key={f.id} href={`/app/fixes/${f.id}`} className="block">
+                  <Card className="rina-card hover:shadow-md transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="font-medium leading-snug">{f.title}</div>
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-3">{f.rationale}</div>
+                      <div className="text-[11px] text-muted-foreground mt-3 flex items-center gap-2">
+                        <span className="capitalize">{f.category}</span>
+                        <span>·</span>
+                        <span>+{f.impactPoints} pts</span>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </Link>
               ))}
             </div>

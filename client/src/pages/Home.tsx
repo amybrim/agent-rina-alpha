@@ -46,8 +46,11 @@ export default function Home() {
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/pricing">
-              <a className="text-sm text-muted-foreground hover:text-foreground px-3 py-2">Pricing</a>
+            <Link
+              href="/pricing"
+              className="text-sm text-muted-foreground hover:text-foreground px-3 py-2"
+            >
+              Pricing
             </Link>
             <Button asChild>
               <a href={ctaHref}>
@@ -83,9 +86,7 @@ export default function Home() {
                 </a>
               </Button>
               <Button size="lg" variant="outline" className="bg-background" asChild>
-                <Link href="/pricing">
-                  <a>See subscription tiers</a>
-                </Link>
+                <Link href="/pricing">See subscription tiers</Link>
               </Button>
             </div>
             <div className="mt-10 flex items-center gap-6 text-xs text-muted-foreground">

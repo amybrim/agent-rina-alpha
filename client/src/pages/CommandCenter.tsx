@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { RINA_HERO_IMAGE } from "@/lib/rina";
 import {
@@ -123,6 +124,8 @@ const RINA_ACTIONS = [
 
 export default function CommandCenter() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const firstName = (user?.name ?? "there").split(" ")[0];
   const { businesses, current, selectedId, select, isLoading, hasNone } =
     useCurrentBusiness();
 
@@ -234,29 +237,65 @@ export default function CommandCenter() {
 
       {!isLoading && current && (
         <div className="relative">
-          {/* Floating Rina character on the left */}
-          <img
-            src={RINA_HERO_IMAGE}
-            alt="Rina"
-            className="hidden xl:block pointer-events-none select-none absolute -left-32 top-32 w-72 h-auto drop-shadow-[0_20px_30px_rgba(80,40,160,0.18)]"
-          />
-
-          <div className="space-y-6 xl:pl-44">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">
-                  Rina's Weekly Visibility Meeting
+          <div className="space-y-6">
+            {/* RINA SPEAKS — the agent greeting, not a dashboard header */}
+            <div className="relative grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4 md:gap-6 items-end">
+              <img
+                src={RINA_HERO_IMAGE}
+                alt="Rina"
+                className="hidden md:block w-full max-w-[200px] h-auto object-contain drop-shadow-[0_20px_30px_rgba(80,40,160,0.18)] -mb-4"
+              />
+              <div className="relative rounded-3xl bg-white border border-border/60 shadow-[0_20px_60px_-30px_rgba(80,40,160,0.35)] px-6 py-5 md:px-8 md:py-7">
+                <div className="absolute -left-2 bottom-8 hidden md:block h-4 w-4 rotate-45 bg-white border-l border-b border-border/60" />
+                <div className="flex items-center gap-2 text-xs font-medium text-primary/80 uppercase tracking-widest mb-2">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Rina, your AI visibility partner
                 </div>
-                <h1 className="font-display text-3xl md:text-4xl rina-gradient-text leading-tight">
-                  How are we doing with AI visibility this week?
+                <h1 className="font-display text-2xl md:text-3xl leading-snug text-foreground">
+                  Hi {firstName} — here's where we stand for {current.name} the week of{" "}
+                  {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}.
                 </h1>
-                <p className="text-muted-foreground text-sm mt-2 max-w-2xl">
-                  Your AI visibility snapshot, insights, and actions — so we keep
-                  getting better. {current.name} ·{" "}
-                  {current.businessType ?? "Type not set"} ·{" "}
-                  {current.location ?? "Location not set"}
+                <p className="text-muted-foreground mt-3 max-w-2xl">
+                  {score.data
+                    ? `I scored your visibility at ${Math.round(score.data.overall)}/100. ${
+                        counts.recommended + counts.drafted > 0
+                          ? `I've lined up ${counts.recommended + counts.drafted} fixes for you to review when you're ready.`
+                          : "Nothing urgent in the queue — we're holding steady."
+                      }`
+                    : `I haven't run a scan for ${current.name} yet. Hit “Run new scan” when you're ready and I'll get started.`}
                 </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Button
+                    onClick={() => runScan.mutate({ businessId: current.id })}
+                    disabled={runScan.isPending}
+                    size="sm"
+                  >
+                    <RefreshCw className={`mr-1.5 h-4 w-4 ${runScan.isPending ? "animate-spin" : ""}`} />
+                    {runScan.isPending ? "Scanning…" : score.data ? "Run a fresh scan" : "Run my first scan"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-white"
+                    onClick={() => {
+                      if (briefing.data) navigate("/app/briefing");
+                      else if (score.data) generateBriefing.mutate({ businessId: current.id });
+                      else toast.message("Run your first scan to unlock the weekly briefing.");
+                    }}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    {briefing.data ? "Open the briefing" : generateBriefing.isPending ? "Drafting…" : "Draft this week's briefing"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Compact context strip (replaces the old dashboard header) */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-1">
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{current.name}</span>
+                {current.businessType ? <> · {current.businessType}</> : null}
+                {current.location ? <> · {current.location}</> : null}
               </div>
               <div className="flex items-center gap-2">
                 {businesses.length > 1 && (
@@ -276,23 +315,11 @@ export default function CommandCenter() {
                     </SelectContent>
                   </Select>
                 )}
-                <div className="rina-card px-3 py-2 bg-white flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="rounded-full bg-white border border-border/60 px-3 py-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                   <CalendarDays className="h-3.5 w-3.5" />
                   Week of{" "}
-                  {new Date().toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                  })}
+                  {new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 </div>
-                <Button
-                  onClick={() => runScan.mutate({ businessId: current.id })}
-                  disabled={runScan.isPending}
-                >
-                  <RefreshCw
-                    className={`mr-1.5 h-4 w-4 ${runScan.isPending ? "animate-spin" : ""}`}
-                  />
-                  {runScan.isPending ? "Scanning…" : "Run new scan"}
-                </Button>
               </div>
             </div>
 
@@ -497,24 +524,22 @@ export default function CommandCenter() {
                     const count = counts[p.key] ?? 0;
                     return (
                       <div key={p.key} className="relative">
-                        <Link href="/app/fixes">
-                          <a className="block group">
-                            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-3 hover:border-primary/30 transition-colors">
-                              <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                                <Icon className="h-4 w-4" />
+                        <Link href="/app/fixes" className="block group">
+                          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-3 hover:border-primary/30 transition-colors">
+                            <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium leading-tight">
+                                {p.label}
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium leading-tight">
-                                  {p.label}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground truncate">
-                                  {count > 0
-                                    ? `${count} ${count === 1 ? "fix" : "fixes"}`
-                                    : p.hint}
-                                </div>
+                              <div className="text-[11px] text-muted-foreground truncate">
+                                {count > 0
+                                  ? `${count} ${count === 1 ? "fix" : "fixes"}`
+                                  : p.hint}
                               </div>
                             </div>
-                          </a>
+                          </div>
                         </Link>
                         {i < PIPELINE.length - 1 && (
                           <ArrowRight className="hidden lg:block absolute -right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 z-10" />

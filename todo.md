@@ -55,11 +55,20 @@
 - [ ] Add external AI visibility tests (ChatGPT, Gemini, Perplexity probes)
 
 ## Mockup Realignment (post-feedback)
-- [ ] Replace photographic hero with illustrated Rina character (blue suit, glasses, tablet, animated style) per approved mockup
-- [ ] Refactor RinaLayout to feel like a meeting with Rina, not a SaaS dashboard (Rina stands beside the dashboard, sidebar lists Weekly Meeting / Overview / Business / Reports / Tasks / Integrations / Settings, AI Visibility Health card with sparkline at bottom of sidebar)
-- [ ] Rebuild Weekly Meeting as the primary post-login screen with five numbered question tiles ("Are we showing up?", "Are we being understood?", "Are we trusted?", "Are we recommendation-ready?", "What should we fix next?") with status pills (Improving / Needs Proof / Watch / Draft Ready)
-- [ ] Add "AI Lead Signals" card (Confirmed / Likely / Unknown / Total) to Weekly Meeting
-- [ ] Add "Rina Can Help" action panel (Draft FAQ, Update Metadata, Create Blog Post, Send to Wix, Schedule Social Post, Verify Change) to Weekly Meeting
-- [ ] Add 5-stage horizontal pipeline rail (Recommended → Drafted → Approved → Published → Verified) at the bottom of Weekly Meeting with icons and counts
-- [ ] Diagnose and repair onboarding flow (form submission, redirect, business creation)
-- [ ] Re-run vitest and save a corrective checkpoint
+- [x] Replace photographic hero with illustrated Rina character per approved mockup
+- [x] Refactor RinaLayout to feel like a meeting with Rina (sidebar w/ Weekly Meeting + Health card)
+- [x] Rebuild Weekly Meeting as the primary post-login screen with five numbered question tiles
+- [x] Add "AI Lead Signals" card to Weekly Meeting
+- [x] Add "Rina Can Help" action panel to Weekly Meeting
+- [x] Add 5-stage horizontal pipeline rail at the bottom of Weekly Meeting
+- [x] Diagnose and repair onboarding flow (URL normalizer + sign-in nudge)
+- [x] Re-run vitest and save a corrective checkpoint
+
+## Agent-feel pass + runtime fixes (post-/app review)
+- [ ] Fix `briefings.latest` and `scores.latest` returning `undefined` (must return `null` so React Query accepts the value)
+- [ ] Fix nested `<a>` warning in RinaLayout sidebar links
+- [ ] Replace card-grid Command Center with a true "meeting with Rina" feel: conversational greeting, Rina's voice in copy, sectioned narrative flow
+- [ ] Make Rina address the user by first name and reference the current week
+- [ ] Add Rina speech/portrait column on the left of the meeting screen so Rina is *present*, not decorative
+- [ ] Audit all `*.latest` and `*.history` procedures to ensure they return `null` or `[]` rather than `undefined`
+- [ ] Re-run vitest, save corrected checkpoint

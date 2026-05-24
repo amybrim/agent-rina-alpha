@@ -158,17 +158,17 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
               location === item.to ||
               (item.to !== "/app" && location.startsWith(item.to));
             return (
-              <Link key={item.to} href={item.to}>
-                <a
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                    active
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-foreground/75 hover:bg-secondary/60 hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
-                </a>
+              <Link
+                key={item.to}
+                href={item.to}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                  active
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-foreground/75 hover:bg-secondary/60 hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{item.label}</span>
               </Link>
             );
           })}
