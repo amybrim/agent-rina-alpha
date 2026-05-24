@@ -1,5 +1,7 @@
-export const RINA_HERO_IMAGE = "/manus-storage/rina_character_hero_fc1d5d15.png";
-export const RINA_AVATAR_IMAGE = "/manus-storage/rina_character_avatar_8429ddc5.png";
+export const RINA_HERO_IMAGE =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663126464465/eGbWZFt35deHWYWd9tynau/rina_character_illustrated-iWMXakysx7htEtAjsS3kNF.png";
+export const RINA_AVATAR_IMAGE =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663126464465/eGbWZFt35deHWYWd9tynau/rina_character_illustrated-nnjGCWLnxSYCfRb29oDrrG.webp";
 
 export const SCORE_CATEGORIES: Array<{ key: string; label: string; description: string }> = [
   { key: "crawlability", label: "Crawlability", description: "Can AI crawlers reach and read this site?" },

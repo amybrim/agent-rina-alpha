@@ -46,6 +46,7 @@ export function useCurrentBusiness() {
     isLoading: list.isLoading,
     current,
     selectedId,
+    businessId: selectedId,
     select,
     hasNone: !list.isLoading && (list.data?.length ?? 0) === 0,
   };

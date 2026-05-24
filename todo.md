@@ -53,3 +53,13 @@
 - [ ] Activate Stripe via webdev_add_feature("stripe") and wire checkout sessions per tier
 - [ ] Schedule weekly recurring scans via Heartbeat
 - [ ] Add external AI visibility tests (ChatGPT, Gemini, Perplexity probes)
+
+## Mockup Realignment (post-feedback)
+- [ ] Replace photographic hero with illustrated Rina character (blue suit, glasses, tablet, animated style) per approved mockup
+- [ ] Refactor RinaLayout to feel like a meeting with Rina, not a SaaS dashboard (Rina stands beside the dashboard, sidebar lists Weekly Meeting / Overview / Business / Reports / Tasks / Integrations / Settings, AI Visibility Health card with sparkline at bottom of sidebar)
+- [ ] Rebuild Weekly Meeting as the primary post-login screen with five numbered question tiles ("Are we showing up?", "Are we being understood?", "Are we trusted?", "Are we recommendation-ready?", "What should we fix next?") with status pills (Improving / Needs Proof / Watch / Draft Ready)
+- [ ] Add "AI Lead Signals" card (Confirmed / Likely / Unknown / Total) to Weekly Meeting
+- [ ] Add "Rina Can Help" action panel (Draft FAQ, Update Metadata, Create Blog Post, Send to Wix, Schedule Social Post, Verify Change) to Weekly Meeting
+- [ ] Add 5-stage horizontal pipeline rail (Recommended → Drafted → Approved → Published → Verified) at the bottom of Weekly Meeting with icons and counts
+- [ ] Diagnose and repair onboarding flow (form submission, redirect, business creation)
+- [ ] Re-run vitest and save a corrective checkpoint

@@ -15,23 +15,23 @@
  * Light, warm, sophisticated. Deep plum + champagne + soft cream.
  */
 :root {
-  --background: oklch(0.985 0.005 85);
-  --foreground: oklch(0.22 0.04 290);
+  --background: oklch(0.985 0.005 285);
+  --foreground: oklch(0.22 0.05 285);
 
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.04 290);
+  --card-foreground: oklch(0.22 0.05 285);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.04 290);
+  --popover-foreground: oklch(0.22 0.05 285);
 
-  --primary: oklch(0.32 0.10 305); /* deep plum */
-  --primary-foreground: oklch(0.98 0.01 85);
+  --primary: oklch(0.48 0.22 285); /* vivid indigo-violet — mockup's purple */
+  --primary-foreground: oklch(0.99 0.005 285);
 
-  --secondary: oklch(0.93 0.04 75); /* champagne */
-  --secondary-foreground: oklch(0.30 0.05 305);
+  --secondary: oklch(0.95 0.04 285); /* soft lavender pastel */
+  --secondary-foreground: oklch(0.30 0.10 285);
 
-  --accent: oklch(0.78 0.13 30); /* warm coral */
-  --accent-foreground: oklch(0.22 0.04 290);
+  --accent: oklch(0.78 0.15 60); /* warm gold-amber accent */
+  --accent-foreground: oklch(0.22 0.05 285);
 
   --muted: oklch(0.95 0.01 80);
   --muted-foreground: oklch(0.45 0.02 290);
@@ -41,24 +41,24 @@
 
   --border: oklch(0.90 0.01 80);
   --input: oklch(0.93 0.01 80);
-  --ring: oklch(0.32 0.10 305);
+  --ring: oklch(0.48 0.22 285);
 
   --radius: 0.85rem;
 
-  --chart-1: oklch(0.32 0.10 305);
-  --chart-2: oklch(0.78 0.13 30);
-  --chart-3: oklch(0.62 0.12 200);
-  --chart-4: oklch(0.55 0.14 145);
-  --chart-5: oklch(0.65 0.10 60);
+  --chart-1: oklch(0.48 0.22 285); /* indigo */
+  --chart-2: oklch(0.78 0.15 60);  /* amber */
+  --chart-3: oklch(0.62 0.14 200); /* sky */
+  --chart-4: oklch(0.65 0.16 150); /* mint */
+  --chart-5: oklch(0.68 0.18 25);  /* coral */
 
   --sidebar: oklch(0.97 0.01 85);
   --sidebar-foreground: oklch(0.25 0.04 290);
-  --sidebar-primary: oklch(0.32 0.10 305);
-  --sidebar-primary-foreground: oklch(0.98 0.01 85);
-  --sidebar-accent: oklch(0.93 0.04 75);
-  --sidebar-accent-foreground: oklch(0.30 0.05 305);
-  --sidebar-border: oklch(0.90 0.01 80);
-  --sidebar-ring: oklch(0.32 0.10 305);
+  --sidebar-primary: oklch(0.48 0.22 285);
+  --sidebar-primary-foreground: oklch(0.99 0.005 285);
+  --sidebar-accent: oklch(0.95 0.04 285);
+  --sidebar-accent-foreground: oklch(0.30 0.10 285);
+  --sidebar-border: oklch(0.92 0.01 285);
+  --sidebar-ring: oklch(0.48 0.22 285);
 }
 
 .dark {
@@ -152,7 +152,7 @@
     background: radial-gradient(60% 50% at 50% 0%, oklch(0.86 0.10 75 / 0.55), transparent 70%);
   }
   .rina-gradient-text {
-    background: linear-gradient(135deg, oklch(0.32 0.10 305), oklch(0.55 0.14 25));
+    background: linear-gradient(135deg, oklch(0.48 0.22 285), oklch(0.62 0.20 320));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
