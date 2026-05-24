@@ -13,6 +13,8 @@ import FixQueue from "./pages/FixQueue";
 import FixDetail from "./pages/FixDetail";
 import Briefing from "./pages/Briefing";
 import BusinessProfile from "./pages/BusinessProfile";
+import Settings from "./pages/Settings";
+import Integrations from "./pages/Integrations";
 
 function Router() {
   return (
@@ -26,6 +28,8 @@ function Router() {
       <Route path="/app/fixes/:id" component={FixDetail} />
       <Route path="/app/briefing" component={Briefing} />
       <Route path="/app/profile" component={BusinessProfile} />
+      <Route path="/app/settings" component={Settings} />
+      <Route path="/app/integrations" component={Integrations} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

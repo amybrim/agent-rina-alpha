@@ -78,6 +78,10 @@
 - [x] Home hero updated: Rina stands full-height beside copy on lavender gradient (no boxed image)
 - [x] Onboarding: fixed duplicate useAuth import, background updated to lavender gradient
 - [x] index.css: body background set to lavender gradient (135deg, #e8e4f8 → #dde8f8 → #e4ecf8)
-- [ ] Settings page (placeholder with proper nav)
-- [ ] Integrations page (placeholder with proper nav)
-- [ ] Scorecard, FixQueue, FixDetail, Briefing, BusinessProfile pages: verify lavender gradient background shows through correctly
+- [x] Settings page (placeholder with proper nav)
+- [x] Integrations page (placeholder with proper nav)
+- [x] Scorecard: agent-feel header, Rina addresses user by first name, grade colors, run-scan CTA
+- [x] Briefing: agent-feel header, Rina addresses user by first name, updated 5-question labels
+- [x] BusinessProfile: agent-feel header, Rina-voice copy, improved field placeholders
+- [x] FixQueue: agent-feel header, Rina-voice greeting with active fix count, status descriptions
+- [x] FixDetail: agent-feel polish, improved draft studio copy, status badge inline with title

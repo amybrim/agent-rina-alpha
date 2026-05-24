@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { FIX_STATUS_LABEL, FIX_STATUS_TONE, FixStatus } from "@/lib/rina";
-import { ArrowLeft, CheckCircle2, FileEdit, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileEdit, Info, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Link, useRoute } from "wouter";
@@ -79,19 +79,24 @@ export default function FixDetail() {
     <RinaLayout>
       <Link
         href="/app/fixes"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-3"
+        className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-700 mb-4"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back to fix queue
       </Link>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <Badge variant="secondary" className="mb-2 capitalize">{fix.category}</Badge>
-          <h1 className="font-display text-4xl leading-tight">{fix.title}</h1>
-          <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{fix.rationale}</p>
+          <div className="flex items-center gap-2 mb-2">
+            <Badge variant="secondary" className="capitalize">{fix.category}</Badge>
+            <span className={`text-[11px] uppercase tracking-widest rounded-full px-2.5 py-0.5 font-semibold ${FIX_STATUS_TONE[status]}`}>
+              {FIX_STATUS_LABEL[status]}
+            </span>
+          </div>
+          <h1 className="font-display text-3xl text-slate-800 leading-tight">{fix.title}</h1>
+          <div className="flex items-start gap-2 mt-2 max-w-2xl">
+            <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-slate-500">{fix.rationale}</p>
+          </div>
         </div>
-        <span className={`text-[11px] uppercase tracking-widest rounded-full px-3 py-1 ${FIX_STATUS_TONE[status]}`}>
-          {FIX_STATUS_LABEL[status]}
-        </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -126,12 +131,15 @@ export default function FixDetail() {
                     value={draftEdit}
                     onChange={(e) => setDraftEdit(e.target.value)}
                     rows={16}
-                    className="font-mono text-xs leading-relaxed"
+                    className="font-mono text-xs leading-relaxed bg-slate-50"
                   />
-                  <div className="flex justify-end mt-3">
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-xs text-slate-400">
+                      Edit freely — changes only save when you click "Save edits"
+                    </span>
                     <Button
                       variant="outline"
-                      className="bg-background"
+                      className="bg-white"
                       disabled={draftEdit === fix.draftContent || updateDraftMut.isPending}
                       onClick={() => updateDraftMut.mutate({ fixId: fix.id, draftContent: draftEdit })}
                     >
@@ -140,10 +148,16 @@ export default function FixDetail() {
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-muted-foreground">
-                  Asset type: <span className="font-medium text-foreground">{fix.assetType}</span>
-                  {fix.targetLocation && <> · Target: <span className="font-medium text-foreground">{fix.targetLocation}</span></>}
-                  <div className="mt-2">Click "Generate draft" to have Rina write ready-to-paste content.</div>
+                <div className="rounded-xl bg-slate-50 border border-slate-100 p-5">
+                  <div className="text-sm text-slate-600">
+                    <span className="font-medium text-slate-800">Asset type:</span> {fix.assetType}
+                    {fix.targetLocation && (
+                      <> · <span className="font-medium text-slate-800">Target:</span> {fix.targetLocation}</>
+                    )}
+                  </div>
+                  <div className="mt-3 text-sm text-slate-500">
+                    Click "Generate draft" and I'll write ready-to-paste content for this fix. You can edit it before approving.
+                  </div>
                 </div>
               )}
             </CardContent>
