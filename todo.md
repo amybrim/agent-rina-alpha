@@ -65,10 +65,19 @@
 - [x] Re-run vitest and save a corrective checkpoint
 
 ## Agent-feel pass + runtime fixes (post-/app review)
-- [ ] Fix `briefings.latest` and `scores.latest` returning `undefined` (must return `null` so React Query accepts the value)
-- [ ] Fix nested `<a>` warning in RinaLayout sidebar links
-- [ ] Replace card-grid Command Center with a true "meeting with Rina" feel: conversational greeting, Rina's voice in copy, sectioned narrative flow
-- [ ] Make Rina address the user by first name and reference the current week
-- [ ] Add Rina speech/portrait column on the left of the meeting screen so Rina is *present*, not decorative
-- [ ] Audit all `*.latest` and `*.history` procedures to ensure they return `null` or `[]` rather than `undefined`
-- [ ] Re-run vitest, save corrected checkpoint
+- [x] Fix `briefings.latest` and `scores.latest` returning `undefined` (must return `null` so React Query accepts the value)
+- [x] Fix nested `<a>` warning in RinaLayout sidebar links
+- [x] Replace card-grid Command Center with a true "meeting with Rina" feel: conversational greeting, Rina's voice in copy, sectioned narrative flow
+- [x] Make Rina address the user by first name and reference the current week
+- [x] Add Rina speech/portrait column on the left of the meeting screen so Rina is *present*, not decorative
+- [x] Audit all `*.latest` and `*.history` procedures to ensure they return `null` or `[]` rather than `undefined`
+- [x] Re-run vitest, save corrected checkpoint
+
+## Layout + Hero pass (session 4)
+- [x] RinaLayout fully rebuilt: lavender gradient page, full-height Rina on left outside card, floating white card with internal sidebar
+- [x] Home hero updated: Rina stands full-height beside copy on lavender gradient (no boxed image)
+- [x] Onboarding: fixed duplicate useAuth import, background updated to lavender gradient
+- [x] index.css: body background set to lavender gradient (135deg, #e8e4f8 → #dde8f8 → #e4ecf8)
+- [ ] Settings page (placeholder with proper nav)
+- [ ] Integrations page (placeholder with proper nav)
+- [ ] Scorecard, FixQueue, FixDetail, Briefing, BusinessProfile pages: verify lavender gradient background shows through correctly

@@ -63,43 +63,47 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="rina-glow absolute inset-0 -z-0" />
-        <div className="container relative grid grid-cols-1 lg:grid-cols-12 gap-10 py-20 lg:py-28">
-          <div className="lg:col-span-7">
-            <Badge variant="outline" className="mb-6 rounded-full bg-background">
+      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)' }}>
+        <div className="container relative flex flex-col lg:flex-row items-center gap-0 py-16 lg:py-24">
+          {/* Rina character — full height, standing beside the copy */}
+          <div className="hidden lg:flex flex-col justify-end items-center shrink-0 w-[260px] self-end">
+            <img
+              src={RINA_HERO_IMAGE}
+              alt="Rina"
+              className="w-full max-w-[240px] h-auto object-contain drop-shadow-[0_30px_40px_rgba(100,60,200,0.22)]"
+              style={{ marginBottom: '-4px' }}
+            />
+          </div>
+          {/* Copy */}
+          <div className="flex-1 lg:pl-12">
+            <Badge variant="outline" className="mb-6 rounded-full bg-white/80">
               Human-led intelligence. AI as signal interpreter.
             </Badge>
-            <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight">
+            <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-slate-800">
               Meet <span className="rina-gradient-text">Rina</span>.<br />
               Your AI visibility partner.
             </h1>
-            <p className="mt-6 text-lg text-muted-foreground max-w-xl">
+            <p className="mt-6 text-lg text-slate-600 max-w-xl">
               Rina works alongside you each week to make sure AI search engines can find you, understand you, and
               recommend you. She finds the gaps, drafts the fixes, and waits for your approval before anything ships.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button size="lg" asChild>
+              <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
                 <a href={ctaHref}>
                   {isAuthenticated ? "Continue with Rina" : "Start with Rina"}
                   <ArrowRight className="ml-1.5 h-4 w-4" />
                 </a>
               </Button>
-              <Button size="lg" variant="outline" className="bg-background" asChild>
+              <Button size="lg" variant="outline" className="bg-white/80" asChild>
                 <Link href="/pricing">See subscription tiers</Link>
               </Button>
             </div>
-            <div className="mt-10 flex items-center gap-6 text-xs text-muted-foreground">
+            <div className="mt-10 flex items-center gap-6 text-xs text-slate-500">
               <span>Subscription-based</span>
-              <span className="h-1 w-1 rounded-full bg-border" />
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
               <span>Owner stays in charge</span>
-              <span className="h-1 w-1 rounded-full bg-border" />
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
               <span>5-status fix workflow</span>
-            </div>
-          </div>
-          <div className="lg:col-span-5 relative">
-            <div className="relative rounded-3xl overflow-hidden border border-border/60 shadow-[0_20px_60px_-20px_rgba(60,20,90,0.45)]">
-              <img src={RINA_HERO_IMAGE} alt="Rina" className="w-full h-full object-cover" />
             </div>
           </div>
         </div>

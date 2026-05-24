@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
-import { RINA_AVATAR_IMAGE } from "@/lib/rina";
+import { RINA_HERO_IMAGE } from "@/lib/rina";
 import { trpc } from "@/lib/trpc";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import {
@@ -46,7 +46,6 @@ function HealthCard() {
           ? "Steady"
           : "At Risk";
 
-  // Build mini sparkline points
   const points = (data ?? [])
     .slice()
     .reverse()
@@ -65,17 +64,17 @@ function HealthCard() {
     .join(" ");
 
   return (
-    <div className="rounded-2xl border border-sidebar-border/70 bg-white/80 backdrop-blur-sm p-4 shadow-sm">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+    <div className="rounded-2xl border border-white/60 bg-white/60 backdrop-blur-sm p-4 shadow-sm">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
         AI Visibility Health
       </div>
       <div className="mt-1 flex items-baseline gap-1">
-        <span className="font-display text-3xl text-foreground leading-none">
+        <span className="font-display text-3xl text-slate-800 leading-none">
           {score ?? "—"}
         </span>
-        <span className="text-xs text-muted-foreground">/100</span>
+        <span className="text-xs text-slate-400">/100</span>
       </div>
-      <div className="text-xs text-muted-foreground mt-1">{status}</div>
+      <div className="text-xs text-slate-500 mt-0.5">{status}</div>
       {points.length >= 2 && (
         <svg
           viewBox={`0 0 ${w} ${h}`}
@@ -85,9 +84,8 @@ function HealthCard() {
           <path
             d={path}
             fill="none"
-            stroke="currentColor"
+            stroke="#7c3aed"
             strokeWidth="1.5"
-            className="text-primary"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -103,31 +101,43 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-muted-foreground">Loading Rina…</div>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          background:
+            "linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)",
+        }}
+      >
+        <div className="text-slate-500 text-sm">Loading Rina…</div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-secondary/40 via-background to-primary/5 px-4">
-        <div className="rina-card p-10 max-w-md text-center">
-          <div className="mb-4 flex justify-center">
-            <img
-              src={RINA_AVATAR_IMAGE}
-              alt="Rina"
-              className="h-32 w-auto object-contain"
-            />
-          </div>
-          <h2 className="font-display text-3xl mb-2">Sign in to meet Rina</h2>
-          <p className="text-muted-foreground mb-6">
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{
+          background:
+            "linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)",
+        }}
+      >
+        <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full text-center">
+          <img
+            src={RINA_HERO_IMAGE}
+            alt="Rina"
+            className="h-40 w-auto object-contain mx-auto mb-4"
+          />
+          <h2 className="font-display text-3xl mb-2 text-slate-800">
+            Sign in to meet Rina
+          </h2>
+          <p className="text-slate-500 mb-6 text-sm">
             Rina works alongside you to keep your business visible, understood,
             and recommendable across AI search.
           </p>
           <Button
             size="lg"
-            className="w-full"
+            className="w-full bg-violet-600 hover:bg-violet-700 text-white"
             onClick={() => (window.location.href = getLoginUrl(location))}
           >
             <Sparkles className="mr-2 h-4 w-4" /> Continue with Manus
@@ -138,72 +148,102 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-secondary/30 via-background to-primary/5">
-      <aside className="hidden md:flex w-72 shrink-0 flex-col bg-white/70 backdrop-blur-md border-r border-border/60">
-        <div className="px-6 py-6 flex items-center gap-3 border-b border-border/50">
-          <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-display text-xl shadow-md">
-            R
-          </div>
-          <div className="min-w-0">
-            <div className="font-display text-xl leading-tight">Rina</div>
-            <div className="text-xs text-muted-foreground">
-              AI Visibility CoPilot
+    /* Page: lavender/periwinkle gradient — matches mockup background */
+    <div
+      className="min-h-screen flex items-stretch"
+      style={{
+        background:
+          "linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)",
+      }}
+    >
+      {/* Rina character — full-height, standing outside the card, pointing in */}
+      <div className="hidden xl:flex flex-col justify-end items-center w-[220px] shrink-0 pl-4 pb-0 pointer-events-none select-none">
+        <img
+          src={RINA_HERO_IMAGE}
+          alt="Rina"
+          className="w-full max-w-[210px] h-auto object-contain drop-shadow-[0_30px_40px_rgba(100,60,200,0.22)]"
+          style={{ marginBottom: "-4px" }}
+        />
+      </div>
+
+      {/* Main floating white card */}
+      <div className="flex-1 flex min-w-0 m-4 xl:ml-0 bg-white rounded-3xl shadow-[0_8px_60px_-20px_rgba(80,40,160,0.22)] overflow-hidden">
+        {/* Internal sidebar */}
+        <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-slate-100">
+          {/* Brand mark */}
+          <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
+            <div className="h-10 w-10 rounded-xl bg-violet-600 flex items-center justify-center text-white font-display text-xl shadow">
+              R
+            </div>
+            <div>
+              <div className="font-display text-lg text-slate-800 leading-tight">
+                Agent Rina
+              </div>
+              <div className="text-[11px] text-slate-400">
+                AI Visibility CoPilot
+              </div>
             </div>
           </div>
-        </div>
-        <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const active =
-              location === item.to ||
-              (item.to !== "/app" && location.startsWith(item.to));
-            return (
-              <Link
-                key={item.to}
-                href={item.to}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                  active
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-foreground/75 hover:bg-secondary/60 hover:text-foreground"
-                }`}
+
+          {/* Nav */}
+          <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+            {NAV.map((item) => {
+              const Icon = item.icon;
+              const active =
+                location === item.to ||
+                (item.to !== "/app" && location.startsWith(item.to));
+              return (
+                <Link
+                  key={item.to}
+                  href={item.to}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-150 ${
+                    active
+                      ? "bg-violet-50 text-violet-700 font-semibold"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Bottom: health card + user */}
+          <div className="p-4 space-y-3 border-t border-slate-100">
+            <HealthCard />
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-violet-100 text-violet-700 text-xs font-semibold">
+                  {(user?.name ?? "U")[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-slate-700 truncate">
+                  {user?.name ?? "Owner"}
+                </div>
+                <div className="text-[10px] text-slate-400 truncate">
+                  {user?.email ?? ""}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-slate-400 hover:text-slate-700"
+                onClick={() => logout()}
+                title="Sign out"
               >
-                <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="p-4 space-y-3 border-t border-border/50">
-          <HealthCard />
-          <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9">
-              <AvatarFallback className="bg-primary/15 text-primary text-xs">
-                {(user?.name ?? "U")[0]}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium truncate">
-                {user?.name ?? "Owner"}
-              </div>
-              <div className="text-xs text-muted-foreground truncate">
-                {user?.email ?? ""}
-              </div>
+                <LogOut className="h-3.5 w-3.5" />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => logout()}
-              title="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </aside>
-      <main className="flex-1 min-w-0">
-        <div className="px-6 md:px-10 py-8 max-w-[1400px]">{children}</div>
-      </main>
+        </aside>
+
+        {/* Content area */}
+        <main className="flex-1 min-w-0 overflow-y-auto">
+          <div className="px-6 md:px-8 py-7 max-w-[1200px]">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

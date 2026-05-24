@@ -68,7 +68,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-secondary/40 via-background to-background">
+    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)' }}>
       <div className="container py-10 lg:py-16">
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-10 items-start">
           {/* Left: Rina character + intro */}
