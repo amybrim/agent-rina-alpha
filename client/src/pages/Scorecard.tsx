@@ -1,62 +1,64 @@
 import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { SCORE_CATEGORIES, gradeForScore } from "@/lib/rina";
-import { Sparkles } from "lucide-react";
+import { SCORE_CATEGORIES } from "@/lib/rina";
+import { RefreshCw, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+
+const GRADE_COLOR: Record<string, string> = {
+  A: "text-emerald-600",
+  B: "text-teal-600",
+  C: "text-amber-600",
+  D: "text-orange-600",
+  F: "text-rose-600",
+};
+
+function gradeColor(g: string | null | undefined) {
+  return g ? (GRADE_COLOR[g] ?? "text-slate-400") : "text-slate-400";
+}
 
 export default function Scorecard() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const firstName = (user?.name ?? "there").split(" ")[0];
   const { current, selectedId } = useCurrentBusiness();
-  const score = trpc.scores.latest.useQuery(
+
+  const snapshot = trpc.snapshot.get.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
-  const history = trpc.scores.history.useQuery(
-    { businessId: selectedId! },
-    { enabled: !!selectedId }
-  );
-  const latestScan = trpc.scans.latest.useQuery(
+  const briefingHistory = trpc.briefing.history.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
   const utils = trpc.useUtils();
-  const runScan = trpc.scans.runNow.useMutation({
+  const runScan = trpc.scanner.run.useMutation({
     onSuccess: () => {
-      utils.scores.latest.invalidate();
-      utils.scores.history.invalidate();
+      utils.snapshot.get.invalidate();
+      utils.briefing.history.invalidate();
       toast.success("Rina finished a fresh scan.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const data = score.data;
-  const valueByKey = (key: string): number => {
-    if (!data) return 0;
-    switch (key) {
-      case "crawlability": return data.crawlability;
-      case "structure": return data.structure;
-      case "schema": return data.schemaScore;
-      case "citability": return data.citability;
-      case "authority": return data.authority;
-      case "freshness": return data.freshness;
-      case "clarity": return data.clarity;
-      case "conversion": return data.conversion;
-      default: return 0;
-    }
-  };
+  const s = snapshot.data;
 
-  const gradeColor = (v: number) => {
-    if (v >= 80) return "text-emerald-600";
-    if (v >= 65) return "text-amber-600";
-    return "text-rose-600";
+  // Map SCORE_CATEGORIES to snapshot grade fields
+  const gradeByCategory = (key: string): string | null => {
+    if (!s) return null;
+    switch (key) {
+      case "showing_up": return s.showingUp;
+      case "being_understood": return s.beingUnderstood;
+      case "trusted": return s.trust;
+      case "recommendation_ready": return s.recommendationReady;
+      case "fix_priority": return s.geoReadiness;
+      default: return null;
+    }
   };
 
   return (
@@ -65,32 +67,38 @@ export default function Scorecard() {
       <div className="mb-6">
         <div className="text-xs font-semibold text-violet-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
           <Sparkles className="h-3.5 w-3.5" />
-          AI Visibility Scorecard
+          AI Visibility Overview
         </div>
         <h1 className="font-display text-3xl text-slate-800">
           {current ? (
             <>
-              {firstName}, here's how <span className="text-violet-600">{current.name}</span> scores.
+              {firstName}, here's how{" "}
+              <span className="text-violet-600">{current.name}</span> is showing up.
             </>
           ) : (
-            "Select a business to see your scorecard."
+            "Select a business to see your overview."
           )}
         </h1>
         <p className="text-slate-500 mt-1 text-sm">
-          Eight pillars adapted from peer-reviewed AI visibility research. Each score reflects how well AI
-          crawlers and recommendation engines can find, understand, and cite your business.
+          Five questions that tell you everything about your AI visibility — graded,
+          not scored. Grades reflect Rina's confidence in what she found.
         </p>
       </div>
 
-      {!data && (
+      {!s && !snapshot.isLoading && (
         <Card className="rina-card">
           <CardContent className="p-10 text-center">
             <p className="text-slate-500 mb-4">
-              No score yet. Run a scan from the Weekly Meeting and I'll score your visibility across all eight pillars.
+              No visibility data yet. Run a scan from the Weekly Meeting and I'll
+              grade your visibility across all five dimensions.
             </p>
             {current && (
               <Button
-                onClick={() => runScan.mutate({ businessId: current.id })}
+                onClick={() =>
+                  runScan.mutate({
+                    businessId: current.id,
+                  })
+                }
                 disabled={runScan.isPending}
               >
                 <Sparkles className="mr-1.5 h-4 w-4" />
@@ -101,39 +109,50 @@ export default function Scorecard() {
         </Card>
       )}
 
-      {data && (
+      {s && (
         <div className="space-y-6">
-          {/* Overall score hero */}
+          {/* Overall health hero */}
           <Card className="rina-card">
             <CardContent className="p-7 flex flex-col md:flex-row md:items-end gap-6 justify-between">
               <div>
                 <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">
-                  Overall visibility
+                  Overall visibility health
                 </div>
-                <div className={`font-display text-7xl leading-none ${gradeColor(data.overall)}`}>
-                  {Math.round(data.overall)}
+                <div className={`font-display text-7xl leading-none ${gradeColor(s.healthGrade)}`}>
+                  {s.healthGrade ?? "—"}
                 </div>
                 <div className="text-slate-500 mt-1">
-                  Grade {data.grade ?? gradeForScore(data.overall)} ·{" "}
-                  {data.overall >= 80 ? "Strong" : data.overall >= 65 ? "Steady" : "Needs work"}
+                  {s.healthGrade === "STRONG"
+                    ? "Strong"
+                    : s.healthGrade === "IMPROVING"
+                      ? "Improving"
+                      : s.healthGrade === "AT_RISK"
+                        ? "At Risk"
+                        : s.healthGrade
+                          ? "Needs Work"
+                          : "Awaiting scan"}
                 </div>
               </div>
               <div className="flex-1 max-w-2xl">
-                <p className="text-sm text-slate-700 leading-relaxed">{data.narrative}</p>
-                <div className="mt-4 flex gap-2">
+                {s.rinaRead && (
+                  <p className="text-sm text-slate-700 leading-relaxed">{s.rinaRead}</p>
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     variant="outline"
                     className="bg-white"
-                    onClick={() => runScan.mutate({ businessId: current!.id })}
+                    onClick={() =>
+                      runScan.mutate({
+                        businessId: current!.id,
+                      })
+                    }
                     disabled={runScan.isPending}
                   >
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${runScan.isPending ? "animate-spin" : ""}`} />
                     {runScan.isPending ? "Scanning…" : "Run a fresh scan"}
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => navigate("/app/fixes")}
-                  >
+                  <Button size="sm" onClick={() => navigate("/app/fixes")}>
                     View fix queue
                   </Button>
                 </div>
@@ -141,69 +160,101 @@ export default function Scorecard() {
             </CardContent>
           </Card>
 
-          {/* 8 category cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Five question grade cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {SCORE_CATEGORIES.map((cat) => {
-              const v = valueByKey(cat.key);
+              const grade = gradeByCategory(cat.key);
               return (
                 <Card key={cat.key} className="rina-card">
                   <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="font-display text-lg text-slate-800">{cat.label}</div>
-                        <div className="text-xs text-slate-500">{cat.description}</div>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0 pr-3">
+                        <div className="font-display text-base text-slate-800 leading-tight">
+                          {cat.question}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">{cat.description}</div>
                       </div>
-                      <div className="text-right">
-                        <div className={`font-display text-3xl leading-none ${gradeColor(v)}`}>{v}</div>
-                        <div className="text-xs text-slate-400">grade {gradeForScore(v)}</div>
+                      <div className={`font-display text-4xl leading-none shrink-0 ${gradeColor(grade)}`}>
+                        {grade ?? "—"}
                       </div>
                     </div>
-                    <Progress value={v} className="h-2" />
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      {grade
+                        ? grade === "A" || grade === "B"
+                          ? "Performing well"
+                          : grade === "C"
+                            ? "Room to improve"
+                            : "Needs attention"
+                        : "Run a scan to grade this dimension"}
+                    </div>
                   </CardContent>
                 </Card>
               );
             })}
           </div>
 
-          {/* Score history */}
-          <Card className="rina-card">
-            <CardContent className="p-7">
-              <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-3">
-                Score history
-              </div>
-              {history.data && history.data.length > 0 ? (
+          {/* Findings summary */}
+          {(s.openFindings > 0 || s.criticalFindings > 0) && (
+            <Card className="rina-card">
+              <CardContent className="p-6 flex flex-wrap gap-6">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">
+                    Open findings
+                  </div>
+                  <div className="font-display text-3xl text-slate-800">{s.openFindings}</div>
+                </div>
+                {s.criticalFindings > 0 && (
+                  <div>
+                    <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">
+                      Critical
+                    </div>
+                    <div className="font-display text-3xl text-rose-600">{s.criticalFindings}</div>
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">
+                    Active fixes
+                  </div>
+                  <div className="font-display text-3xl text-violet-600">{s.activeFixCount}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">
+                    Completed fixes
+                  </div>
+                  <div className="font-display text-3xl text-emerald-600">{s.completedFixCount}</div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Briefing history */}
+          {briefingHistory.data && briefingHistory.data.length > 0 && (
+            <Card className="rina-card">
+              <CardContent className="p-7">
+                <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-3">
+                  Briefing history
+                </div>
                 <div className="space-y-2">
-                  {history.data.map((s) => (
+                  {briefingHistory.data.map((b) => (
                     <div
-                      key={s.id}
+                      key={b.id}
                       className="flex items-center justify-between text-sm border-b border-slate-50 last:border-0 py-2"
                     >
                       <span className="text-slate-500">
-                        {new Date(s.createdAt).toLocaleString()}
+                        Week of {new Date(b.weekStartDate).toLocaleDateString()}
                       </span>
-                      <span className={`font-medium ${gradeColor(s.overall)}`}>
-                        {Math.round(s.overall)}{" "}
-                        <span className="text-slate-400">/ 100 · {s.grade}</span>
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {b.showingUpGrade && (
+                          <Badge variant="outline" className={gradeColor(b.showingUpGrade)}>
+                            {b.showingUpGrade}
+                          </Badge>
+                        )}
+                        <span className="text-slate-400 text-xs">
+                          {b.fixesCompleted} fixed · {b.fixesInProgress} in progress
+                        </span>
+                      </div>
                     </div>
                   ))}
-                </div>
-              ) : (
-                <div className="text-sm text-slate-400">No history yet — run more scans to track your progress over time.</div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Evidence from last scan */}
-          {latestScan.data && (
-            <Card className="rina-card">
-              <CardContent className="p-7">
-                <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">
-                  Evidence from last scan
-                </div>
-                <div className="text-sm text-slate-500">
-                  {new Date(latestScan.data.startedAt).toLocaleString()} · status{" "}
-                  <span className="font-medium text-slate-700">{latestScan.data.status}</span>
                 </div>
               </CardContent>
             </Card>

@@ -1,5 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { normalizeUrl } from "../../../server/rina/url";
+// normalizeUrl: ensure URL has https:// prefix
+function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  return `https://${trimmed}`;
+}
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,7 +22,7 @@ import { useLocation } from "wouter";
 export default function Onboarding() {
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const create = trpc.businesses.create.useMutation();
+  const create = trpc.business.create.useMutation();
   const utils = trpc.useUtils();
 
   const [form, setForm] = useState({
@@ -50,15 +56,14 @@ export default function Onboarding() {
       return;
     }
     try {
-      const { id } = await create.mutateAsync({
+      const result = await create.mutateAsync({
         name: form.name.trim(),
-        websiteUrl: cleanUrl,
+        url: cleanUrl,
         businessType: form.businessType.trim() || undefined,
-        location: form.location.trim() || undefined,
-        description: form.description.trim() || undefined,
         goals: form.goals.trim() || undefined,
       });
-      utils.businesses.list.invalidate();
+      const id = result.id;
+      utils.business.list.invalidate();
       localStorage.setItem("rina.currentBusinessId", String(id));
       toast.success("Living Business Profile created. Rina is ready.");
       navigate("/app");

@@ -1,201 +1,333 @@
-import { boolean, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  decimal,
+  int,
+  json,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
-/**
- * Core user table — extended with Rina subscription tier.
- */
+// ─────────────────────────────────────────────
+// 1. users (extended from template)
+// ─────────────────────────────────────────────
 export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  /** Rina subscription tier — labels are NON-NEGOTIABLE. */
-  subscriptionTier: mysqlEnum("subscriptionTier", [
-    "starter",
-    "growth",
-    "pro",
-    "agency",
-  ])
-    .default("starter")
-    .notNull(),
-  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
-  subscriptionStatus: varchar("subscriptionStatus", { length: 32 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  id: varchar("id", { length: 128 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  avatarUrl: text("avatar_url"),
+  role: mysqlEnum("role", ["admin", "user"]).notNull().default("user"),
+  subscriptionTier: mysqlEnum("subscription_tier", ["starter", "growth", "pro", "agency"]).default("starter"),
+  subscriptionStatus: varchar("subscription_status", { length: 64 }),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 128 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 128 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
+// ─────────────────────────────────────────────
+// User type alias (id field IS the openId)
+// ─────────────────────────────────────────────
+// User type — id IS the openId, virtual openId field added for sdk.ts compatibility
+export type User = Omit<typeof users.$inferSelect, 'id'> & {
+  id: string;
+  openId: string;
+  loginMethod?: string | null;
+  lastSignedIn?: Date | null;
+};
 
-/**
- * Living Business Profile — the foundation Rina uses for every decision.
- * Onboarding MUST be completed before scanning or scoring runs.
- */
+// ─────────────────────────────────────────────
+// 2. businesses
+// ─────────────────────────────────────────────
 export const businesses = mysqlTable("businesses", {
-  id: int("id").autoincrement().primaryKey(),
-  ownerId: int("ownerId").notNull(),
-  name: varchar("name", { length: 256 }).notNull(),
-  websiteUrl: varchar("websiteUrl", { length: 512 }).notNull(),
-  businessType: varchar("businessType", { length: 128 }),
-  location: varchar("location", { length: 256 }),
-  description: text("description"),
+  id: int("id").primaryKey().autoincrement(),
+  userId: varchar("user_id", { length: 128 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  url: varchar("url", { length: 512 }).notNull(),
+  industry: varchar("industry", { length: 128 }),
+  businessType: varchar("business_type", { length: 128 }),
+  audience: text("audience"),
+  offers: json("offers").$type<Array<{ name: string; description?: string }>>(),
+  location: json("location").$type<{ city?: string; state?: string; country?: string; serviceArea?: string }>(),
+  differentiators: json("differentiators").$type<string[]>(),
+  proof: json("proof").$type<{ reviews?: string; awards?: string; credentials?: string; caseStudies?: string; yearsInBusiness?: number }>(),
+  brandVoice: varchar("brand_voice", { length: 128 }),
   goals: text("goals"),
-  /** Computed status. "draft" = onboarding incomplete. "active" = ready for scan. */
-  profileStatus: mysqlEnum("profileStatus", ["draft", "active"])
-    .default("draft")
-    .notNull(),
-  /** Heartbeat task uid for the weekly briefing schedule (nullable). */
-  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  competitors: json("competitors").$type<string[]>(),
+  onboardingComplete: boolean("onboarding_complete").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type Business = typeof businesses.$inferSelect;
-export type InsertBusiness = typeof businesses.$inferInsert;
-
-/**
- * Evidence Store — every scan saved with full payload + timestamp.
- * Used to compare current state against last week.
- */
-export const scans = mysqlTable("scans", {
-  id: int("id").autoincrement().primaryKey(),
-  businessId: int("businessId").notNull(),
-  status: mysqlEnum("status", ["queued", "running", "complete", "failed"])
-    .default("queued")
-    .notNull(),
-  /** Raw scanner findings — JSON blob with H1, meta, schema types, sitemap, robots.txt, internal links, etc. */
-  findings: json("findings"),
-  errorMessage: text("errorMessage"),
-  startedAt: timestamp("startedAt").defaultNow().notNull(),
-  completedAt: timestamp("completedAt"),
+// ─────────────────────────────────────────────
+// 3. offer_profiles
+// ─────────────────────────────────────────────
+export const offerProfiles = mysqlTable("offer_profiles", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  audience: text("audience"),
+  problemSolved: text("problem_solved"),
+  proof: json("proof").$type<{ testimonials?: string[]; caseStudies?: string[] }>(),
+  locationRelevance: text("location_relevance"),
+  revenuePriority: int("revenue_priority").default(0),
+  relatedPageUrls: json("related_page_urls").$type<string[]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type Scan = typeof scans.$inferSelect;
-export type InsertScan = typeof scans.$inferInsert;
-
-/**
- * GEO/Auriti-Style Scoring — 8 categories, full history per scan.
- * Categories (each scored 0-100):
- *  1. crawlability       — robots.txt, sitemap, AI-bot access
- *  2. structure          — semantic HTML, headings, page hierarchy
- *  3. schema             — Organization, Service, FAQ, LocalBusiness markup
- *  4. citability         — quotable, factual, well-attributed content
- *  5. authority          — sameAs links, external presence, credentials
- *  6. freshness          — recent updates, dated content
- *  7. clarity            — plain language, no jargon, audience match
- *  8. conversion         — clear CTAs, contact info, next-step paths
- */
-export const scores = mysqlTable("scores", {
-  id: int("id").autoincrement().primaryKey(),
-  businessId: int("businessId").notNull(),
-  scanId: int("scanId").notNull(),
-  crawlability: int("crawlability").notNull(),
-  structure: int("structure").notNull(),
-  schemaScore: int("schemaScore").notNull(),
-  citability: int("citability").notNull(),
-  authority: int("authority").notNull(),
-  freshness: int("freshness").notNull(),
-  clarity: int("clarity").notNull(),
-  conversion: int("conversion").notNull(),
-  overall: int("overall").notNull(),
-  /** Letter grade derived from overall: A+, A, B, C, D, F */
-  grade: varchar("grade", { length: 4 }).notNull(),
-  /** Human narrative from Rina explaining the score. */
-  narrative: text("narrative"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+// ─────────────────────────────────────────────
+// 4. audience_profiles
+// ─────────────────────────────────────────────
+export const audienceProfiles = mysqlTable("audience_profiles", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  audienceType: varchar("audience_type", { length: 128 }).notNull(),
+  needs: json("needs").$type<string[]>(),
+  buyingQuestions: json("buying_questions").$type<string[]>(),
+  objections: json("objections").$type<string[]>(),
+  searchIntent: text("search_intent"),
+  recommendationScenarios: json("recommendation_scenarios").$type<string[]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type Score = typeof scores.$inferSelect;
-export type InsertScore = typeof scores.$inferInsert;
+// ─────────────────────────────────────────────
+// 5. website_page_records
+// ─────────────────────────────────────────────
+export const websitePageRecords = mysqlTable("website_page_records", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  url: varchar("url", { length: 512 }).notNull(),
+  pageType: varchar("page_type", { length: 64 }),
+  title: text("title"),
+  metaDescription: text("meta_description"),
+  headings: json("headings").$type<{ h1?: string[]; h2?: string[]; h3?: string[] }>(),
+  schemaPresent: json("schema_present").$type<{ types: string[]; valid: boolean; raw?: string }>(),
+  contentSummary: text("content_summary"),
+  clarityScore: mysqlEnum("clarity_score", ["CLEAR", "PARTIAL", "NOT_YET_VISIBLE"]),
+  proofScore: mysqlEnum("proof_score", ["CLEAR", "PARTIAL", "NOT_YET_VISIBLE"]),
+  crawlable: boolean("crawlable").default(true),
+  lastScannedAt: timestamp("last_scanned_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
 
-/**
- * Fix Queue — STRICT 5-status workflow (NON-NEGOTIABLE order):
- *   recommended → drafted → approved → published → verified
- */
-export const fixes = mysqlTable("fixes", {
-  id: int("id").autoincrement().primaryKey(),
-  businessId: int("businessId").notNull(),
-  /** Which scoring pillar this fix improves. */
-  category: mysqlEnum("category", [
-    "crawlability",
-    "structure",
-    "schema",
-    "citability",
-    "authority",
-    "freshness",
-    "clarity",
-    "conversion",
-  ]).notNull(),
-  title: varchar("title", { length: 256 }).notNull(),
-  rationale: text("rationale").notNull(),
-  /** What kind of asset Rina drafts: meta, faq_schema, org_schema, gbp, page_copy, handoff_note, etc. */
-  assetType: varchar("assetType", { length: 64 }).notNull(),
-  /** The drafted content (filled when status >= drafted). */
-  draftContent: text("draftContent"),
-  /** Live-site reference where fix should be applied. */
-  targetLocation: varchar("targetLocation", { length: 512 }),
-  /** Priority: 1 = highest. */
-  priority: int("priority").default(3).notNull(),
-  /** Estimated visibility points gained when verified. */
-  impactPoints: int("impactPoints").default(0).notNull(),
+// ─────────────────────────────────────────────
+// 6. visibility_findings
+// ─────────────────────────────────────────────
+export const visibilityFindings = mysqlTable("visibility_findings", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  pageRecordId: int("page_record_id"),
+  findingType: varchar("finding_type", { length: 128 }).notNull(),
+  source: varchar("source", { length: 128 }).notNull(),
+  severity: mysqlEnum("severity", ["critical", "high", "medium", "low"]).notNull(),
+  businessMeaning: text("business_meaning").notNull(),
+  evidence: text("evidence"),
+  confidence: mysqlEnum("confidence", [
+    "verified",
+    "confirmed_by_user",
+    "detected",
+    "inferred",
+    "likely",
+    "unknown",
+  ]).notNull().default("detected"),
+  dateFound: timestamp("date_found").notNull().defaultNow(),
+  status: mysqlEnum("status", ["open", "addressed", "deferred", "rejected"]).notNull().default("open"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+// ─────────────────────────────────────────────
+// 7. fix_items — THE MOST IMPORTANT TABLE
+// ─────────────────────────────────────────────
+export const fixItems = mysqlTable("fix_items", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  findingId: int("finding_id"),
+  issue: text("issue").notNull(),
+  recommendation: text("recommendation").notNull(),
+  impactLevel: mysqlEnum("impact_level", ["high", "medium", "low"]).notNull().default("medium"),
+  difficulty: mysqlEnum("difficulty", ["easy", "medium", "hard"]).notNull().default("medium"),
   status: mysqlEnum("status", [
+    "found",
     "recommended",
     "drafted",
+    "needs_input",
+    "ready_for_review",
     "approved",
+    "scheduled",
     "published",
     "verified",
-  ])
-    .default("recommended")
-    .notNull(),
-  /** Owner notes attached during approval. */
-  ownerNotes: text("ownerNotes"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    "deferred",
+    "rejected",
+    "failed",
+  ]).notNull().default("found"),
+  owner: varchar("owner", { length: 128 }),
+  targetPlatform: varchar("target_platform", { length: 128 }),
+  dueDate: timestamp("due_date"),
+  verificationMethod: text("verification_method"),
+  verificationResult: text("verification_result"),
+  rejectedReason: text("rejected_reason"),
+  deferredReason: text("deferred_reason"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type Fix = typeof fixes.$inferSelect;
-export type InsertFix = typeof fixes.$inferInsert;
-
-/**
- * Audit trail of every fix transition. Append-only history.
- */
-export const fixHistory = mysqlTable("fixHistory", {
-  id: int("id").autoincrement().primaryKey(),
-  fixId: int("fixId").notNull(),
-  fromStatus: varchar("fromStatus", { length: 32 }),
-  toStatus: varchar("toStatus", { length: 32 }).notNull(),
-  actorUserId: int("actorUserId"),
-  note: text("note"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+// ─────────────────────────────────────────────
+// 8. generated_assets — VERSIONED, NOT OVERWRITTEN
+// ─────────────────────────────────────────────
+export const generatedAssets = mysqlTable("generated_assets", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  fixItemId: int("fix_item_id"),
+  assetType: mysqlEnum("asset_type", [
+    "faq",
+    "metadata",
+    "schema",
+    "homepage_copy",
+    "service_page",
+    "blog_post",
+    "social_post",
+    "gbp_description",
+    "email",
+  ]).notNull(),
+  version: int("version").notNull().default(1),
+  content: text("content").notNull(),
+  targetUrl: varchar("target_url", { length: 512 }),
+  targetPlatform: varchar("target_platform", { length: 128 }),
+  status: mysqlEnum("status", ["draft", "approved", "published", "verified", "rejected"]).notNull().default("draft"),
+  approverUserId: varchar("approver_user_id", { length: 128 }),
+  approvedAt: timestamp("approved_at"),
+  publishedAt: timestamp("published_at"),
+  verifiedAt: timestamp("verified_at"),
+  sourceFindingId: int("source_finding_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type FixHistory = typeof fixHistory.$inferSelect;
-export type InsertFixHistory = typeof fixHistory.$inferInsert;
-
-/**
- * Weekly Visibility Briefing — answers the FIVE structural questions explicitly:
- *   1. Are we showing up?
- *   2. Are we understood?
- *   3. Are we recommendable?
- *   4. What changed?
- *   5. What's next?
- */
-export const briefings = mysqlTable("briefings", {
-  id: int("id").autoincrement().primaryKey(),
-  businessId: int("businessId").notNull(),
-  weekOf: timestamp("weekOf").notNull(),
-  showingUp: text("showingUp").notNull(),
-  understood: text("understood").notNull(),
-  recommendable: text("recommendable").notNull(),
-  whatChanged: text("whatChanged").notNull(),
-  whatsNext: text("whatsNext").notNull(),
-  /** Optional snapshot of overall score at the time. */
-  overallScore: int("overallScore"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+// ─────────────────────────────────────────────
+// 9. integration_connections
+// ─────────────────────────────────────────────
+export const integrationConnections = mysqlTable("integration_connections", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  platform: mysqlEnum("platform", [
+    "wix",
+    "shopify",
+    "wordpress",
+    "ga4",
+    "search_console",
+    "gbp",
+    "linkedin",
+    "instagram",
+    "gmail",
+    "crm",
+  ]).notNull(),
+  accountIdentifier: varchar("account_identifier", { length: 255 }),
+  permissionLevel: mysqlEnum("permission_level", [
+    "no_access",
+    "read_only",
+    "draft_only",
+    "approval_required",
+    "verify_only",
+    "admin_restricted",
+  ]).notNull().default("no_access"),
+  lastSyncedAt: timestamp("last_synced_at"),
+  connectionStatus: mysqlEnum("connection_status", ["connected", "disconnected", "error"]).notNull().default("disconnected"),
+  errorMessage: text("error_message"),
+  capabilities: json("capabilities").$type<Record<string, boolean>>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type Briefing = typeof briefings.$inferSelect;
-export type InsertBriefing = typeof briefings.$inferInsert;
+// ─────────────────────────────────────────────
+// 10. visibility_briefings
+// ─────────────────────────────────────────────
+export const visibilityBriefings = mysqlTable("visibility_briefings", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  weekStartDate: timestamp("week_start_date").notNull(),
+  weekEndDate: timestamp("week_end_date").notNull(),
+  showingUpGrade: mysqlEnum("showing_up_grade", ["clear", "partial", "not_yet_visible"]),
+  beingUnderstoodGrade: mysqlEnum("being_understood_grade", ["clear", "partial", "not_yet_visible"]),
+  trustGrade: mysqlEnum("trust_grade", ["clear", "partial", "not_yet_visible"]),
+  recommendationReadyGrade: mysqlEnum("recommendation_ready_grade", ["clear", "partial", "not_yet_visible"]),
+  geoReadinessGrade: mysqlEnum("geo_readiness_grade", ["clear", "partial", "not_yet_visible"]),
+  rinaRead: text("rina_read"),
+  fixesCompleted: int("fixes_completed").default(0),
+  fixesInProgress: int("fixes_in_progress").default(0),
+  topActions: json("top_actions").$type<Array<{ fixId: number; action: string; why: string }>>(),
+  leadSignalSummary: json("lead_signal_summary").$type<{
+    confirmedAi: number;
+    likelyVisibility: number;
+    unknown: number;
+    total: number;
+  }>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─────────────────────────────────────────────
+// 11. lead_signal_records
+// ─────────────────────────────────────────────
+export const leadSignalRecords = mysqlTable("lead_signal_records", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  attribution: mysqlEnum("attribution", [
+    "confirmed_ai",
+    "likely_ai",
+    "visibility_influenced",
+    "unknown",
+  ]).notNull().default("unknown"),
+  source: varchar("source", { length: 255 }),
+  landingPageUrl: varchar("landing_page_url", { length: 512 }),
+  formResponse: json("form_response").$type<Record<string, string>>(),
+  crmRecordId: varchar("crm_record_id", { length: 128 }),
+  confidence: mysqlEnum("confidence", ["verified", "likely", "unknown"]).notNull().default("unknown"),
+  revenueAmount: decimal("revenue_amount", { precision: 10, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─────────────────────────────────────────────
+// 12. prompt_test_results
+// ─────────────────────────────────────────────
+export const promptTestResults = mysqlTable("prompt_test_results", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  promptText: text("prompt_text").notNull(),
+  platform: mysqlEnum("platform", ["chatgpt", "perplexity", "gemini", "claude", "copilot"]).notNull(),
+  businessMentioned: boolean("business_mentioned").notNull().default(false),
+  positionInResponse: int("position_in_response"),
+  competitorsMentioned: json("competitors_mentioned").$type<string[]>(),
+  summaryAccuracy: mysqlEnum("summary_accuracy", ["accurate", "partial", "inaccurate", "not_mentioned"]),
+  sourceCitations: json("source_citations").$type<string[]>(),
+  rawResponse: text("raw_response"),
+  testedAt: timestamp("tested_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─────────────────────────────────────────────
+// 13. user_decision_records
+// ─────────────────────────────────────────────
+export const userDecisionRecords = mysqlTable("user_decision_records", {
+  id: int("id").primaryKey().autoincrement(),
+  businessId: int("business_id").notNull(),
+  userId: varchar("user_id", { length: 128 }).notNull(),
+  decisionType: mysqlEnum("decision_type", [
+    "approved",
+    "rejected",
+    "deferred",
+    "edited",
+    "overridden",
+  ]).notNull(),
+  entityType: mysqlEnum("entity_type", ["fix_item", "generated_asset", "recommendation"]).notNull(),
+  entityId: int("entity_id").notNull(),
+  notes: text("notes"),
+  futurePreference: json("future_preference").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

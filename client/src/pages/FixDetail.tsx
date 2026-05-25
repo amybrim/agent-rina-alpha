@@ -11,54 +11,70 @@ import { toast } from "sonner";
 import { Link, useRoute } from "wouter";
 
 const ALLOWED_NEXT: Record<FixStatus, FixStatus[]> = {
-  recommended: ["drafted"],
-  drafted: ["approved", "recommended"],
-  approved: ["published", "drafted"],
-  published: ["verified", "approved"],
+  found: ["recommended"],
+  recommended: ["drafted", "needs_input", "deferred", "rejected"],
+  needs_input: ["drafted", "deferred", "rejected"],
+  drafted: ["ready_for_review", "needs_input"],
+  ready_for_review: ["approved", "rejected"],
+  approved: ["scheduled", "published"],
+  scheduled: ["published"],
+  published: ["verified", "failed"],
+  failed: ["drafted"],
   verified: [],
+  deferred: ["recommended"],
+  rejected: [],
 };
 
 export default function FixDetail() {
   const [match, params] = useRoute("/app/fixes/:id");
   const id = match ? Number(params?.id) : null;
-  const fixQuery = trpc.fixes.get.useQuery({ id: id! }, { enabled: !!id });
+  const fixQuery = trpc.fixes.get.useQuery({ fixId: id! }, { enabled: !!id });
+  const decisionHistoryQuery = trpc.fixes.decisionHistory.useQuery(
+    { fixId: id! },
+    { enabled: !!id }
+  );
+  const latestAsset = trpc.assets.getLatest.useQuery(
+    { fixId: id! },
+    { enabled: !!id }
+  );
   const utils = trpc.useUtils();
 
   const [draftEdit, setDraftEdit] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
 
   useEffect(() => {
-    if (fixQuery.data?.fix.draftContent) {
-      setDraftEdit(fixQuery.data.fix.draftContent);
+    if (latestAsset.data?.content) {
+      setDraftEdit(latestAsset.data.content);
     } else {
       setDraftEdit("");
     }
-  }, [fixQuery.data?.fix.draftContent]);
+  }, [latestAsset.data?.content]);
 
-  const draftMut = trpc.fixes.draft.useMutation({
+  const draftMut = trpc.assets.draft.useMutation({
     onSuccess: () => {
-      utils.fixes.get.invalidate({ id: id! });
-      utils.fixes.listByBusiness.invalidate();
+      utils.fixes.get.invalidate({ fixId: id! });
+      utils.fixes.list.invalidate();
       toast.success("Rina drafted the asset.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const updateDraftMut = trpc.fixes.updateDraft.useMutation({
+  const updateDraftMut = trpc.assets.updateContent.useMutation({
     onSuccess: () => {
-      utils.fixes.get.invalidate({ id: id! });
+      utils.fixes.get.invalidate({ fixId: id! });
+      utils.assets.getLatest.invalidate({ fixId: id! });
       toast.success("Draft updated.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
   const transitionMut = trpc.fixes.transition.useMutation({
     onSuccess: () => {
-      utils.fixes.get.invalidate({ id: id! });
-      utils.fixes.listByBusiness.invalidate();
+      utils.fixes.get.invalidate({ fixId: id! });
+      utils.fixes.list.invalidate();
       toast.success("Status updated.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
   if (!id) return <RinaLayout><div>Not found.</div></RinaLayout>;
@@ -71,9 +87,10 @@ export default function FixDetail() {
       </RinaLayout>
     );
   }
-  const { fix, history } = data;
+  const fix = data;
   const status = fix.status as FixStatus;
   const allowedNext = ALLOWED_NEXT[status] ?? [];
+  const decisionHistory = decisionHistoryQuery.data ?? [];
 
   return (
     <RinaLayout>
@@ -86,15 +103,15 @@ export default function FixDetail() {
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Badge variant="secondary" className="capitalize">{fix.category}</Badge>
+            <Badge variant="secondary" className="capitalize">{fix.impactLevel} impact</Badge>
             <span className={`text-[11px] uppercase tracking-widest rounded-full px-2.5 py-0.5 font-semibold ${FIX_STATUS_TONE[status]}`}>
               {FIX_STATUS_LABEL[status]}
             </span>
           </div>
-          <h1 className="font-display text-3xl text-slate-800 leading-tight">{fix.title}</h1>
+          <h1 className="font-display text-3xl text-slate-800 leading-tight">{fix.issue}</h1>
           <div className="flex items-start gap-2 mt-2 max-w-2xl">
             <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-            <p className="text-sm text-slate-500">{fix.rationale}</p>
+            <p className="text-sm text-slate-500">{fix.recommendation}</p>
           </div>
         </div>
       </div>
@@ -108,13 +125,13 @@ export default function FixDetail() {
                   <FileEdit className="h-4 w-4 text-primary" />
                   <span className="text-xs uppercase tracking-widest text-muted-foreground">Rina Draft Studio</span>
                 </div>
-                {!fix.draftContent && (
+                {!latestAsset.data && (
                   <Button onClick={() => draftMut.mutate({ fixId: fix.id })} disabled={draftMut.isPending}>
                     <Sparkles className="mr-1.5 h-4 w-4" />
                     {draftMut.isPending ? "Drafting…" : "Generate draft"}
                   </Button>
                 )}
-                {fix.draftContent && (
+                {latestAsset.data && (
                   <Button
                     variant="outline"
                     className="bg-background"
@@ -125,7 +142,7 @@ export default function FixDetail() {
                   </Button>
                 )}
               </div>
-              {fix.draftContent ? (
+              {latestAsset.data ? (
                 <>
                   <Textarea
                     value={draftEdit}
@@ -140,8 +157,8 @@ export default function FixDetail() {
                     <Button
                       variant="outline"
                       className="bg-white"
-                      disabled={draftEdit === fix.draftContent || updateDraftMut.isPending}
-                      onClick={() => updateDraftMut.mutate({ fixId: fix.id, draftContent: draftEdit })}
+                      disabled={draftEdit === (latestAsset.data?.content ?? "") || updateDraftMut.isPending}
+                      onClick={() => latestAsset.data && updateDraftMut.mutate({ assetId: latestAsset.data.id, content: draftEdit })}
                     >
                       Save edits
                     </Button>
@@ -150,9 +167,9 @@ export default function FixDetail() {
               ) : (
                 <div className="rounded-xl bg-slate-50 border border-slate-100 p-5">
                   <div className="text-sm text-slate-600">
-                    <span className="font-medium text-slate-800">Asset type:</span> {fix.assetType}
-                    {fix.targetLocation && (
-                      <> · <span className="font-medium text-slate-800">Target:</span> {fix.targetLocation}</>
+                    <span className="font-medium text-slate-800">Impact:</span> {fix.impactLevel}
+                    {fix.targetPlatform && (
+                      <> · <span className="font-medium text-slate-800">Platform:</span> {fix.targetPlatform}</>
                     )}
                   </div>
                   <div className="mt-3 text-sm text-slate-500">
@@ -197,8 +214,8 @@ export default function FixDetail() {
                       onClick={() =>
                         transitionMut.mutate({
                           fixId: fix.id,
-                          toStatus: next,
-                          ownerNotes: notes || undefined,
+                          newStatus: next,
+                          notes: notes || undefined,
                         })
                       }
                       disabled={transitionMut.isPending}
@@ -211,7 +228,7 @@ export default function FixDetail() {
                   ))}
                 </div>
               )}
-              {status === "drafted" && !fix.draftContent && (
+              {status === "drafted" && !latestAsset.data && (
                 <div className="text-xs text-destructive mt-2">A draft is required before approval.</div>
               )}
             </CardContent>
@@ -221,16 +238,16 @@ export default function FixDetail() {
             <CardContent className="p-7">
               <div className="text-xs uppercase tracking-widest text-muted-foreground mb-3">History</div>
               <div className="space-y-3">
-                {history.length === 0 && <div className="text-sm text-muted-foreground">No history yet.</div>}
-                {history.map((h) => (
+                {decisionHistory.length === 0 && <div className="text-sm text-muted-foreground">No history yet.</div>}
+                {decisionHistory.map((h) => (
                   <div key={h.id} className="text-sm border-l-2 border-primary/30 pl-3">
-                    <div className="font-medium">
-                      {h.fromStatus ? `${h.fromStatus} → ${h.toStatus}` : `Created · ${h.toStatus}`}
+                    <div className="font-medium capitalize">
+                      {h.decisionType}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {new Date(h.createdAt).toLocaleString()}
                     </div>
-                    {h.note && <div className="text-xs mt-1 text-foreground/80">{h.note}</div>}
+                    {h.notes && <div className="text-xs mt-1 text-foreground/80">{h.notes}</div>}
                   </div>
                 ))}
               </div>

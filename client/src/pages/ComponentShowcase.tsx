@@ -171,7 +171,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast as sonnerToast } from "sonner";
-import { AIChatBox, type Message } from "@/components/AIChatBox";
+// AIChatBox removed in rebuild — type Message stub for showcase
+type Message = { id: string; role: "user" | "assistant"; content: string };
 
 export default function ComponentsShowcase() {
   const { theme, toggleTheme } = useTheme();
@@ -188,9 +189,7 @@ export default function ComponentsShowcase() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // AI ChatBox demo state
-  const [chatMessages, setChatMessages] = useState<Message[]>([
-    { role: "system", content: "You are a helpful assistant." },
-  ]);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   const handleDialogSubmit = () => {
@@ -211,15 +210,17 @@ export default function ComponentsShowcase() {
 
   const handleChatSend = (content: string) => {
     // Add user message
-    const newMessages: Message[] = [...chatMessages, { role: "user", content }];
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content };
+    const newMessages: Message[] = [...chatMessages, userMsg];
     setChatMessages(newMessages);
 
     // Simulate AI response with delay
     setIsChatLoading(true);
     setTimeout(() => {
       const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `This is a **demo response**. In a real app, you would call a tRPC mutation here:\n\n\`\`\`typescript\nconst chatMutation = trpc.ai.chat.useMutation({\n  onSuccess: (response) => {\n    setChatMessages(prev => [...prev, {\n      role: "assistant",\n      content: response.choices[0].message.content\n    }]);\n  }\n});\n\nchatMutation.mutate({ messages: newMessages });\n\`\`\`\n\nYour message was: "${content}"`,
+        content: `Demo response to: "${content}"`,
       };
       setChatMessages([...newMessages, aiResponse]);
       setIsChatLoading(false);
@@ -1406,20 +1407,9 @@ export default function ComponentsShowcase() {
                       This is a demo with simulated responses. In a real app, you'd connect it to a tRPC mutation.
                     </p>
                   </div>
-                  <AIChatBox
-                    messages={chatMessages}
-                    onSendMessage={handleChatSend}
-                    isLoading={isChatLoading}
-                    placeholder="Try sending a message..."
-                    height="500px"
-                    emptyStateMessage="How can I help you today?"
-                    suggestedPrompts={[
-                      "What is React?",
-                      "Explain TypeScript",
-                      "How to use tRPC?",
-                      "Best practices for web development",
-                    ]}
-                  />
+                  <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
+                    Chat component removed in rebuild. Use WeeklyMeeting for Rina conversations.
+                  </div>
                 </div>
               </CardContent>
             </Card>

@@ -31,37 +31,22 @@ const NAV: Array<{ to: string; label: string; icon: typeof LayoutGrid }> = [
 
 function HealthCard() {
   const { businessId } = useCurrentBusiness();
-  const { data } = trpc.scores.history.useQuery(
+  const { data } = trpc.snapshot.get.useQuery(
     { businessId: businessId ?? 0 },
     { enabled: !!businessId }
   );
-  const latest = data?.[0];
-  const score = latest ? Math.round(latest.overall) : null;
-  const status =
-    score === null
-      ? "Awaiting first scan"
-      : score >= 80
-        ? "Strong"
-        : score >= 65
-          ? "Steady"
-          : "At Risk";
 
-  const points = (data ?? [])
-    .slice()
-    .reverse()
-    .map((s) => Math.round(s.overall));
-  const max = Math.max(100, ...points);
-  const min = Math.min(0, ...points);
-  const range = Math.max(1, max - min);
-  const w = 120;
-  const h = 32;
-  const path = points
-    .map((p, i) => {
-      const x = points.length === 1 ? w / 2 : (i / (points.length - 1)) * w;
-      const y = h - ((p - min) / range) * h;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
+  const grade = data?.healthGrade ?? null;
+  const status =
+    grade === null
+      ? "Awaiting first scan"
+      : grade === "STRONG"
+        ? "Strong"
+        : grade === "IMPROVING"
+          ? "Improving"
+          : grade === "AT_RISK"
+            ? "At Risk"
+            : "Needs Work";
 
   return (
     <div className="rounded-2xl border border-white/60 bg-white/60 backdrop-blur-sm p-4 shadow-sm">
@@ -70,26 +55,12 @@ function HealthCard() {
       </div>
       <div className="mt-1 flex items-baseline gap-1">
         <span className="font-display text-3xl text-slate-800 leading-none">
-          {score ?? "—"}
+          {grade ?? "—"}
         </span>
-        <span className="text-xs text-slate-400">/100</span>
       </div>
       <div className="text-xs text-slate-500 mt-0.5">{status}</div>
-      {points.length >= 2 && (
-        <svg
-          viewBox={`0 0 ${w} ${h}`}
-          className="mt-2 w-full h-8"
-          preserveAspectRatio="none"
-        >
-          <path
-            d={path}
-            fill="none"
-            stroke="#7c3aed"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+      {data?.rinaRead && (
+        <div className="text-[10px] text-slate-400 mt-1 line-clamp-2">{data.rinaRead}</div>
       )}
     </div>
   );

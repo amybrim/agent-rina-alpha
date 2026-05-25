@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 const STORAGE_KEY = "rina.currentBusinessId";
 
 export function useCurrentBusiness() {
-  const list = trpc.businesses.list.useQuery();
+  const list = trpc.business.list.useQuery();
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   // Restore selection on mount

@@ -1,268 +1,84 @@
-import { and, desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import {
-  briefings,
-  businesses,
-  fixes,
-  fixHistory,
-  InsertBriefing,
-  InsertBusiness,
-  InsertFix,
-  InsertFixHistory,
-  InsertScan,
-  InsertScore,
-  InsertUser,
-  scans,
-  scores,
-  users,
-} from "../drizzle/schema";
-import { ENV } from "./_core/env";
+import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
+import * as schema from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+// ─────────────────────────────────────────────
+// Singleton DB connection
+// ─────────────────────────────────────────────
+type DbType = MySql2Database<typeof schema> & { $client: mysql.Pool };
 
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+let _db: DbType | null = null;
+
+export function getDb(): DbType {
+  if (!_db) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is not set");
+    const pool = mysql.createPool(url);
+    _db = drizzle(pool, { schema, mode: "default" }) as DbType;
   }
   return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
+// Named export for direct use in brain modules — lazy proxy so it initializes on first use
+export const db: DbType = new Proxy({} as DbType, {
+  get(_target, prop) {
+    return getDb()[prop as keyof DbType];
+  },
+});
 
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+// ─────────────────────────────────────────────
+// User type (re-exported for sdk.ts compatibility)
+// ─────────────────────────────────────────────
+export type { User } from "../drizzle/schema";
 
-  try {
-    const values: InsertUser = { openId: user.openId };
-    const updateSet: Record<string, unknown> = {};
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
+// ─────────────────────────────────────────────
+// User helpers (required by sdk.ts)
+// The users table uses `id` as the primary key (varchar, set to openId value)
+// ─────────────────────────────────────────────
+type UserRow = typeof schema.users.$inferSelect;
 
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-    textFields.forEach(assignNullable);
+export type UpsertUserInput = {
+  openId: string; // maps to users.id
+  name?: string | null;
+  email?: string | null;
+  loginMethod?: string | null;
+  lastSignedIn?: Date | null; // ignored — not in schema, kept for sdk.ts compatibility
+};
 
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
-}
-
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
-}
-
-// ── Businesses ────────────────────────────────────────────────────────────
-
-export async function listBusinessesByOwner(ownerId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(businesses).where(eq(businesses.ownerId, ownerId)).orderBy(desc(businesses.createdAt));
-}
-
-export async function getBusinessById(id: number, ownerId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db
+export async function getUserByOpenId(openId: string): Promise<(UserRow & { openId: string }) | null> {
+  const [user] = await db
     .select()
-    .from(businesses)
-    .where(and(eq(businesses.id, id), eq(businesses.ownerId, ownerId)))
+    .from(schema.users)
+    .where(eq(schema.users.id, openId))
     .limit(1);
-  return rows[0];
+  if (!user) return null;
+  // Attach openId as virtual field (id IS the openId)
+  return { ...user, openId: user.id };
 }
 
-export async function createBusiness(input: InsertBusiness) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(businesses).values(input);
-  // mysql2 returns insertId
-  // @ts-expect-error drizzle returns header at index 0 for mysql
-  const insertId = result[0]?.insertId ?? result?.insertId;
-  return insertId as number;
-}
-
-export async function updateBusiness(id: number, ownerId: number, patch: Partial<InsertBusiness>) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db
-    .update(businesses)
-    .set(patch)
-    .where(and(eq(businesses.id, id), eq(businesses.ownerId, ownerId)));
-}
-
-// ── Scans ────────────────────────────────────────────────────────────────
-
-export async function createScan(input: InsertScan) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(scans).values(input);
-  // @ts-expect-error
-  const insertId = result[0]?.insertId ?? result?.insertId;
-  return insertId as number;
-}
-
-export async function updateScan(id: number, patch: Partial<InsertScan>) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(scans).set(patch).where(eq(scans.id, id));
-}
-
-export async function listScansByBusiness(businessId: number, limit = 10) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
+export async function upsertUser(input: UpsertUserInput): Promise<void> {
+  const existing = await db
     .select()
-    .from(scans)
-    .where(eq(scans.businessId, businessId))
-    .orderBy(desc(scans.startedAt))
-    .limit(limit);
-}
+    .from(schema.users)
+    .where(eq(schema.users.id, input.openId))
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
 
-export async function getLatestScan(businessId: number) {
-  const rows = await listScansByBusiness(businessId, 1);
-  return rows[0] ?? null;
-}
-
-// ── Scores ───────────────────────────────────────────────────────────────
-
-export async function createScore(input: InsertScore) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(scores).values(input);
-  // @ts-expect-error
-  const insertId = result[0]?.insertId ?? result?.insertId;
-  return insertId as number;
-}
-
-export async function listScoresByBusiness(businessId: number, limit = 12) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(scores)
-    .where(eq(scores.businessId, businessId))
-    .orderBy(desc(scores.createdAt))
-    .limit(limit);
-}
-
-export async function getLatestScore(businessId: number) {
-  const rows = await listScoresByBusiness(businessId, 1);
-  return rows[0] ?? null;
-}
-
-// ── Fixes ────────────────────────────────────────────────────────────────
-
-export async function createFix(input: InsertFix) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(fixes).values(input);
-  // @ts-expect-error
-  const insertId = result[0]?.insertId ?? result?.insertId;
-  return insertId as number;
-}
-
-export async function listFixesByBusiness(businessId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(fixes)
-    .where(eq(fixes.businessId, businessId))
-    .orderBy(fixes.priority, desc(fixes.impactPoints));
-}
-
-export async function getFixById(id: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const rows = await db.select().from(fixes).where(eq(fixes.id, id)).limit(1);
-  return rows[0];
-}
-
-export async function updateFix(id: number, patch: Partial<InsertFix>) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(fixes).set(patch).where(eq(fixes.id, id));
-}
-
-export async function appendFixHistory(input: InsertFixHistory) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.insert(fixHistory).values(input);
-}
-
-export async function listFixHistory(fixId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(fixHistory)
-    .where(eq(fixHistory.fixId, fixId))
-    .orderBy(desc(fixHistory.createdAt));
-}
-
-// ── Briefings ────────────────────────────────────────────────────────────
-
-export async function createBriefing(input: InsertBriefing) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(briefings).values(input);
-  // @ts-expect-error
-  const insertId = result[0]?.insertId ?? result?.insertId;
-  return insertId as number;
-}
-
-export async function listBriefingsByBusiness(businessId: number, limit = 8) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(briefings)
-    .where(eq(briefings.businessId, businessId))
-    .orderBy(desc(briefings.weekOf))
-    .limit(limit);
-}
-
-export async function getLatestBriefing(businessId: number) {
-  const rows = await listBriefingsByBusiness(businessId, 1);
-  return rows[0] ?? null;
+  if (existing) {
+    const updates: Partial<typeof schema.users.$inferInsert> = { updatedAt: new Date() };
+    if (input.name !== undefined && input.name !== null) updates.name = input.name;
+    if (input.email !== undefined) updates.email = input.email;
+    // lastSignedIn not in schema — ignored
+    await db
+      .update(schema.users)
+      .set(updates)
+      .where(eq(schema.users.id, input.openId));
+  } else {
+    await db.insert(schema.users).values({
+      id: input.openId,
+      name: input.name ?? "User",
+      email: input.email ?? null,
+    });
+  }
 }

@@ -129,37 +129,36 @@ export default function CommandCenter() {
   const { businesses, current, selectedId, select, isLoading, hasNone } =
     useCurrentBusiness();
 
-  const score = trpc.scores.latest.useQuery(
+  const snapshot = trpc.snapshot.get.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
-  const fixes = trpc.fixes.listByBusiness.useQuery(
+  const fixes = trpc.fixes.list.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
-  const briefing = trpc.briefings.latest.useQuery(
+  const briefing = trpc.briefing.latest.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
 
   const utils = trpc.useUtils();
-  const runScan = trpc.scans.runNow.useMutation({
+  const runScan = trpc.scanner.run.useMutation({
     onSuccess: () => {
-      utils.scores.latest.invalidate();
-      utils.scores.history.invalidate();
-      utils.fixes.listByBusiness.invalidate();
+      utils.snapshot.get.invalidate();
+      utils.fixes.list.invalidate();
       toast.success("Rina finished a fresh scan.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const generateBriefing = trpc.briefings.generate.useMutation({
+  const generateBriefing = trpc.briefing.generate.useMutation({
     onSuccess: () => {
-      utils.briefings.latest.invalidate();
+      utils.briefing.latest.invalidate();
       toast.success("Weekly briefing ready.");
       navigate("/app/briefing");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
   // Derive pipeline counts from actual fix queue
@@ -174,35 +173,28 @@ export default function CommandCenter() {
     return c;
   }, [fixes.data]);
 
-  // Derive question tile tones from category scores
+  // Derive question tile tones from snapshot grades
   const tone = useMemo(() => {
-    const s = score.data;
-    const t = (val: number | undefined): ToneKey => {
-      if (val === undefined) return "neutral";
-      if (val >= 80) return "improving";
-      if (val >= 65) return "watch";
-      if (val >= 45) return "needs_proof";
+    const s = snapshot.data;
+    const gradeToTone = (g: string | null | undefined): ToneKey => {
+      if (!g) return "neutral";
+      if (g === "A" || g === "B") return "improving";
+      if (g === "C") return "watch";
       return "needs_proof";
     };
-    const showingUp = s ? Math.round((s.crawlability + s.structure + s.freshness) / 3) : undefined;
-    const understood = s ? Math.round((s.schemaScore + s.clarity) / 2) : undefined;
-    const trusted = s ? s.authority : undefined;
-    const recRdy = s ? Math.round((s.citability + s.conversion) / 2) : undefined;
-    const drafted = (fixes.data ?? []).some((f) => f.status === "drafted");
+    const drafted = (fixes.data ?? []).some((f: { status: string }) => f.status === "drafted");
     return {
-      showingUp: { tone: t(showingUp), label: showingUp === undefined ? "—" : tone80Label(showingUp) },
-      understood: { tone: t(understood), label: understood === undefined ? "—" : tone80Label(understood) },
-      trusted: { tone: t(trusted), label: trusted === undefined ? "—" : tone80Label(trusted) },
-      recRdy: { tone: t(recRdy), label: recRdy === undefined ? "—" : tone80Label(recRdy) },
+      showingUp: { tone: gradeToTone(s?.showingUp), label: s?.showingUp ?? "—" },
+      understood: { tone: gradeToTone(s?.beingUnderstood), label: s?.beingUnderstood ?? "—" },
+      trusted: { tone: gradeToTone(s?.trust), label: s?.trust ?? "—" },
+      recRdy: { tone: gradeToTone(s?.recommendationReady), label: s?.recommendationReady ?? "—" },
       drafts: drafted
         ? { tone: "draft_ready" as ToneKey, label: "Draft Ready" }
         : counts.recommended > 0
           ? { tone: "watch" as ToneKey, label: "Watch" }
           : { tone: "neutral" as ToneKey, label: "All clear" },
-      // not used in tile but exposed for narrative
-      raw: { showingUp, understood, trusted, recRdy },
     };
-  }, [score.data, fixes.data, counts.recommended]);
+  }, [snapshot.data, fixes.data, counts.recommended]);
 
   return (
     <RinaLayout>
@@ -256,13 +248,13 @@ export default function CommandCenter() {
                   {new Date().toLocaleDateString(undefined, { month: "long", day: "numeric" })}.
                 </h1>
                 <p className="text-muted-foreground mt-3 max-w-2xl">
-                  {score.data
-                    ? `I scored your visibility at ${Math.round(score.data.overall)}/100. ${
+                                    {snapshot.data
+                    ? `${snapshot.data.rinaRead ?? `Your visibility grade is ${snapshot.data.healthGrade}.`} ${
                         counts.recommended + counts.drafted > 0
                           ? `I've lined up ${counts.recommended + counts.drafted} fixes for you to review when you're ready.`
                           : "Nothing urgent in the queue — we're holding steady."
                       }`
-                    : `I haven't run a scan for ${current.name} yet. Hit “Run new scan” when you're ready and I'll get started.`}
+                    : `I haven't run a scan for ${current.name} yet. Hit "Run new scan" when you're ready and I'll get started.`}
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <Button
@@ -271,7 +263,7 @@ export default function CommandCenter() {
                     size="sm"
                   >
                     <RefreshCw className={`mr-1.5 h-4 w-4 ${runScan.isPending ? "animate-spin" : ""}`} />
-                    {runScan.isPending ? "Scanning…" : score.data ? "Run a fresh scan" : "Run my first scan"}
+                    {runScan.isPending ? "Scanning…" : snapshot.data ? "Run a fresh scan" : "Run my first scan"}
                   </Button>
                   <Button
                     variant="outline"
@@ -279,7 +271,7 @@ export default function CommandCenter() {
                     className="bg-white"
                     onClick={() => {
                       if (briefing.data) navigate("/app/briefing");
-                      else if (score.data) generateBriefing.mutate({ businessId: current.id });
+                      else if (snapshot.data) generateBriefing.mutate({ businessId: current.id });
                       else toast.message("Run your first scan to unlock the weekly briefing.");
                     }}
                   >
@@ -331,9 +323,9 @@ export default function CommandCenter() {
                 question="Are we showing up?"
                 tone={tone.showingUp.tone}
                 toneLabel={tone.showingUp.label}
-                caption={
-                  tone.raw.showingUp !== undefined
-                    ? `Visibility signal at ${tone.raw.showingUp}/100`
+                    caption={
+                  snapshot.data?.showingUp
+                    ? `Visibility grade: ${snapshot.data.showingUp}`
                     : "Run a scan to measure visibility"
                 }
                 onClick={() => navigate("/app/scorecard")}
@@ -344,9 +336,9 @@ export default function CommandCenter() {
                 question="Are we being understood?"
                 tone={tone.understood.tone}
                 toneLabel={tone.understood.label}
-                caption={
-                  tone.raw.understood !== undefined
-                    ? `Schema + clarity at ${tone.raw.understood}/100`
+                    caption={
+                  snapshot.data?.beingUnderstood
+                    ? `Understanding grade: ${snapshot.data.beingUnderstood}`
                     : "Schema + clarity not yet measured"
                 }
                 onClick={() => navigate("/app/scorecard")}
@@ -357,9 +349,9 @@ export default function CommandCenter() {
                 question="Are we trusted?"
                 tone={tone.trusted.tone}
                 toneLabel={tone.trusted.label}
-                caption={
-                  tone.raw.trusted !== undefined
-                    ? `Authority at ${tone.raw.trusted}/100`
+                    caption={
+                  snapshot.data?.trust
+                    ? `Trust grade: ${snapshot.data.trust}`
                     : "Authority not yet measured"
                 }
                 onClick={() => navigate("/app/scorecard")}
@@ -370,9 +362,9 @@ export default function CommandCenter() {
                 question="Are we recommendation-ready?"
                 tone={tone.recRdy.tone}
                 toneLabel={tone.recRdy.label}
-                caption={
-                  tone.raw.recRdy !== undefined
-                    ? `Citability + conversion at ${tone.raw.recRdy}/100`
+                    caption={
+                  snapshot.data?.recommendationReady
+                    ? `Recommendation grade: ${snapshot.data.recommendationReady}`
                     : "Citability not yet measured"
                 }
                 onClick={() => navigate("/app/scorecard")}
@@ -503,7 +495,7 @@ export default function CommandCenter() {
                     onClick={() => {
                       if (briefing.data) {
                         navigate("/app/briefing");
-                      } else if (score.data) {
+                      } else if (snapshot.data) {
                         generateBriefing.mutate({ businessId: current.id });
                       } else {
                         toast.message("Run your first scan to unlock briefings.");

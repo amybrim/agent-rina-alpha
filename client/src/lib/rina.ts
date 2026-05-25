@@ -1,49 +1,149 @@
-export const RINA_HERO_IMAGE =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663126464465/eGbWZFt35deHWYWd9tynau/rina_character_illustrated-iWMXakysx7htEtAjsS3kNF.png";
-export const RINA_AVATAR_IMAGE =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663126464465/eGbWZFt35deHWYWd9tynau/rina_character_illustrated-nnjGCWLnxSYCfRb29oDrrG.webp";
+// ─────────────────────────────────────────────
+// Rina client-side constants and helpers
+// ─────────────────────────────────────────────
 
-export const SCORE_CATEGORIES: Array<{ key: string; label: string; description: string }> = [
-  { key: "crawlability", label: "Crawlability", description: "Can AI crawlers reach and read this site?" },
-  { key: "structure", label: "Structure", description: "Are pages organized so AI can interpret them?" },
-  { key: "schema", label: "Schema", description: "Is structured data present and accurate?" },
-  { key: "citability", label: "Citability", description: "Is content quotable, structured, and answer-friendly?" },
-  { key: "authority", label: "Authority", description: "Are external signals confirming who you are?" },
-  { key: "freshness", label: "Freshness", description: "Is the site updated and signaling recency?" },
-  { key: "clarity", label: "Clarity", description: "Is your offer obvious within seconds?" },
-  { key: "conversion", label: "Conversion", description: "Are calls to action clear and reachable?" },
-];
+// Hero image — placeholder until CDN asset is uploaded
+export const RINA_HERO_IMAGE = "/rina-hero-placeholder.svg";
 
-export const FIX_STATUS_ORDER = [
-  "recommended",
-  "drafted",
-  "approved",
-  "published",
-  "verified",
-] as const;
-
-export type FixStatus = (typeof FIX_STATUS_ORDER)[number];
+// ─────────────────────────────────────────────
+// Fix status display helpers
+// ─────────────────────────────────────────────
+export type FixStatus =
+  | "found"
+  | "recommended"
+  | "drafted"
+  | "needs_input"
+  | "ready_for_review"
+  | "approved"
+  | "scheduled"
+  | "published"
+  | "verified"
+  | "deferred"
+  | "rejected"
+  | "failed";
 
 export const FIX_STATUS_LABEL: Record<FixStatus, string> = {
+  found: "Found",
   recommended: "Recommended",
-  drafted: "Drafted",
+  drafted: "Draft Ready",
+  needs_input: "Needs Your Input",
+  ready_for_review: "Ready for Review",
   approved: "Approved",
+  scheduled: "Scheduled",
   published: "Published",
   verified: "Verified",
+  deferred: "Deferred",
+  rejected: "Rejected",
+  failed: "Failed",
 };
 
-export const FIX_STATUS_TONE: Record<FixStatus, string> = {
-  recommended: "bg-secondary text-secondary-foreground",
-  drafted: "bg-amber-100 text-amber-900",
-  approved: "bg-blue-100 text-blue-900",
-  published: "bg-emerald-100 text-emerald-900",
-  verified: "bg-primary text-primary-foreground",
+export const FIX_STATUS_TONE: Record<FixStatus, "default" | "secondary" | "destructive" | "outline"> = {
+  found: "outline",
+  recommended: "secondary",
+  drafted: "secondary",
+  needs_input: "destructive",
+  ready_for_review: "default",
+  approved: "default",
+  scheduled: "default",
+  published: "default",
+  verified: "default",
+  deferred: "outline",
+  rejected: "destructive",
+  failed: "destructive",
 };
 
-export function gradeForScore(score: number): string {
+export const FIX_STATUS_ORDER: FixStatus[] = [
+  "needs_input",
+  "recommended",
+  "drafted",
+  "ready_for_review",
+  "approved",
+  "scheduled",
+  "published",
+  "verified",
+  "found",
+  "deferred",
+  "rejected",
+  "failed",
+];
+
+// ─────────────────────────────────────────────
+// Scorecard helpers
+// ─────────────────────────────────────────────
+export interface ScoreCategory {
+  key: string;
+  label: string;
+  description: string;
+  question: string;
+}
+
+export const SCORE_CATEGORIES: ScoreCategory[] = [
+  {
+    key: "showing_up",
+    label: "Showing Up",
+    description: "Are you appearing in AI-generated answers?",
+    question: "Are we showing up?",
+  },
+  {
+    key: "being_understood",
+    label: "Being Understood",
+    description: "When AI mentions you, is the description accurate?",
+    question: "Are we being understood?",
+  },
+  {
+    key: "trusted",
+    label: "Trusted",
+    description: "Does AI present you as credible and authoritative?",
+    question: "Are we trusted?",
+  },
+  {
+    key: "recommendation_ready",
+    label: "Recommendation Ready",
+    description: "Would AI recommend you when someone asks for a provider?",
+    question: "Are we recommendation-ready?",
+  },
+  {
+    key: "fix_priority",
+    label: "Fix Priority",
+    description: "What should be fixed first to improve visibility?",
+    question: "What should we fix next?",
+  },
+];
+
+export type ConfidenceLabel = "confirmed" | "inferred" | "estimated" | "unknown";
+
+export const CONFIDENCE_COLOR: Record<ConfidenceLabel, string> = {
+  confirmed: "text-emerald-600",
+  inferred: "text-violet-600",
+  estimated: "text-amber-600",
+  unknown: "text-slate-400",
+};
+
+export const CONFIDENCE_LABEL: Record<ConfidenceLabel, string> = {
+  confirmed: "Confirmed",
+  inferred: "Inferred",
+  estimated: "Estimated",
+  unknown: "Unknown",
+};
+
+export type GradeLevel = "A" | "B" | "C" | "D" | "F" | "—";
+
+export function gradeForScore(score: number | null | undefined): GradeLevel {
+  if (score === null || score === undefined) return "—";
   if (score >= 90) return "A";
-  if (score >= 80) return "B";
-  if (score >= 70) return "C";
-  if (score >= 60) return "D";
+  if (score >= 75) return "B";
+  if (score >= 60) return "C";
+  if (score >= 45) return "D";
   return "F";
+}
+
+export function gradeColor(grade: GradeLevel): string {
+  switch (grade) {
+    case "A": return "text-emerald-600";
+    case "B": return "text-teal-600";
+    case "C": return "text-amber-600";
+    case "D": return "text-orange-600";
+    case "F": return "text-rose-600";
+    default: return "text-slate-400";
+  }
 }

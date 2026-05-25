@@ -1,6 +1,7 @@
 import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -8,34 +9,74 @@ import { RINA_HERO_IMAGE } from "@/lib/rina";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
+// Maps the new briefing shape to the five questions
 const QUESTIONS = [
-  { key: "showingUp", label: "Are we showing up?", number: 1 },
-  { key: "understood", label: "Are we being understood?", number: 2 },
-  { key: "recommendable", label: "Are we trusted?", number: 3 },
-  { key: "whatChanged", label: "Are we recommendation-ready?", number: 4 },
-  { key: "whatsNext", label: "What should we fix next?", number: 5 },
+  {
+    key: "showingUpGrade",
+    narrativeKey: "rinaRead",
+    label: "Are we showing up?",
+    number: 1,
+    description: "Crawlability, indexability, and AI discovery signals.",
+  },
+  {
+    key: "beingUnderstoodGrade",
+    narrativeKey: null,
+    label: "Are we being understood?",
+    number: 2,
+    description: "Schema markup, metadata clarity, and structured content.",
+  },
+  {
+    key: "trustGrade",
+    narrativeKey: null,
+    label: "Are we trusted?",
+    number: 3,
+    description: "Authority signals, proof points, and credibility markers.",
+  },
+  {
+    key: "recommendationReadyGrade",
+    narrativeKey: null,
+    label: "Are we recommendation-ready?",
+    number: 4,
+    description: "Citability, conversion copy, and offer clarity.",
+  },
+  {
+    key: "geoReadinessGrade",
+    narrativeKey: "topActions",
+    label: "What should we fix next?",
+    number: 5,
+    description: "GEO readiness and the highest-impact actions for this week.",
+  },
 ] as const;
+
+const GRADE_COLOR: Record<string, string> = {
+  A: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  B: "bg-teal-50 text-teal-700 border-teal-200",
+  C: "bg-amber-50 text-amber-800 border-amber-200",
+  D: "bg-orange-50 text-orange-700 border-orange-200",
+  F: "bg-rose-50 text-rose-700 border-rose-200",
+};
 
 export default function Briefing() {
   const { user } = useAuth();
   const firstName = (user?.name ?? "there").split(" ")[0];
   const { current, selectedId } = useCurrentBusiness();
-  const briefing = trpc.briefings.latest.useQuery(
+
+  const briefing = trpc.briefing.latest.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
-  const list = trpc.briefings.listByBusiness.useQuery(
+  const history = trpc.briefing.history.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
   const utils = trpc.useUtils();
-  const generate = trpc.briefings.generate.useMutation({
+  const generate = trpc.briefing.generate.useMutation({
     onSuccess: () => {
-      utils.briefings.latest.invalidate();
-      utils.briefings.listByBusiness.invalidate();
+      utils.briefing.latest.invalidate();
+      utils.briefing.history.invalidate();
       toast.success("Weekly briefing ready.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
   const data = briefing.data;
@@ -61,7 +102,8 @@ export default function Briefing() {
           </h1>
           {data && (
             <div className="text-sm text-slate-400 mt-1">
-              Week of {new Date(data.weekOf).toLocaleDateString()} · overall score {data.overallScore}/100
+              Week of {new Date(data.weekStartDate).toLocaleDateString()} ·{" "}
+              {data.fixesCompleted} fixed · {data.fixesInProgress} in progress
             </div>
           )}
         </div>
@@ -75,7 +117,7 @@ export default function Briefing() {
         </Button>
       </div>
 
-      {!data && (
+      {!data && !briefing.isLoading && (
         <Card className="rina-card">
           <CardContent className="p-10 text-center">
             <img
@@ -96,42 +138,84 @@ export default function Briefing() {
 
       {data && (
         <div className="space-y-4">
-          {QUESTIONS.map((q) => (
-            <Card key={q.key} className="rina-card">
-              <CardContent className="p-7">
-                <div className="flex items-start gap-4">
-                  <div className="h-9 w-9 rounded-full bg-violet-600 text-white flex items-center justify-center font-display text-lg shrink-0 shadow-sm">
-                    {q.number}
+          {QUESTIONS.map((q) => {
+            const grade = data[q.key as keyof typeof data] as string | null;
+            const narrative =
+              q.key === "geoReadinessGrade"
+                ? Array.isArray(data.topActions)
+                  ? (data.topActions as Array<{ why: string }>).map((a) => a.why).join("\n")
+                  : null
+                : q.key === "showingUpGrade"
+                  ? data.rinaRead
+                  : null;
+
+            return (
+              <Card key={q.key} className="rina-card">
+                <CardContent className="p-7">
+                  <div className="flex items-start gap-4">
+                    <div className="h-9 w-9 rounded-full bg-violet-600 text-white flex items-center justify-center font-display text-lg shrink-0 shadow-sm">
+                      {q.number}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="font-display text-xl text-slate-800">{q.label}</div>
+                        {grade && (
+                          <Badge
+                            variant="outline"
+                            className={`font-display text-base px-2.5 py-0.5 ${GRADE_COLOR[grade] ?? ""}`}
+                          >
+                            {grade}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-400">{q.description}</p>
+                      {narrative && (
+                        <p className="mt-3 text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">
+                          {narrative}
+                        </p>
+                      )}
+                      {!grade && (
+                        <p className="mt-2 text-sm text-slate-400 italic">
+                          Not yet graded — run a scan to populate this dimension.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="font-display text-xl text-slate-800">{q.label}</div>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">
-                      {data[q.key as keyof typeof data] as string}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {list.data && list.data.length > 1 && (
+      {history.data && history.data.length > 1 && (
         <Card className="rina-card mt-8">
           <CardContent className="p-7">
             <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-3">
               Past briefings
             </div>
             <div className="space-y-2 text-sm">
-              {list.data.slice(1).map((b) => (
+              {history.data.slice(1).map((b) => (
                 <div
                   key={b.id}
                   className="flex items-center justify-between border-b border-slate-50 last:border-0 py-2"
                 >
                   <span className="text-slate-500">
-                    Week of {new Date(b.weekOf).toLocaleDateString()}
+                    Week of {new Date(b.weekStartDate).toLocaleDateString()}
                   </span>
-                  <span className="font-medium text-slate-700">{b.overallScore} / 100</span>
+                  <div className="flex items-center gap-2">
+                    {b.showingUpGrade && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${GRADE_COLOR[b.showingUpGrade] ?? ""}`}
+                      >
+                        {b.showingUpGrade}
+                      </Badge>
+                    )}
+                    <span className="text-slate-400 text-xs">
+                      {b.fixesCompleted} fixed
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

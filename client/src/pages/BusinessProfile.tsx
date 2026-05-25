@@ -18,13 +18,13 @@ export default function BusinessProfile() {
   const firstName = (user?.name ?? "there").split(" ")[0];
   const { current, selectedId } = useCurrentBusiness();
   const utils = trpc.useUtils();
-  const update = trpc.businesses.update.useMutation({
+  const update = trpc.business.update.useMutation({
     onSuccess: () => {
-      utils.businesses.list.invalidate();
-      utils.businesses.get.invalidate();
+      utils.business.get.invalidate();
+      utils.business.getFullProfile.invalidate();
       toast.success("Profile updated. I'll use this in my next scan.");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
   const [form, setForm] = useState({
@@ -40,10 +40,12 @@ export default function BusinessProfile() {
     if (current) {
       setForm({
         name: current.name ?? "",
-        websiteUrl: current.websiteUrl ?? "",
+        websiteUrl: current.url ?? "",
         businessType: current.businessType ?? "",
-        location: current.location ?? "",
-        description: current.description ?? "",
+        location: typeof current.location === "object" && current.location !== null
+          ? (current.location as { city?: string }).city ?? ""
+          : "",
+        description: "",
         goals: current.goals ?? "",
       });
     }
@@ -55,15 +57,14 @@ export default function BusinessProfile() {
   const onSave = () => {
     if (!selectedId) return;
     update.mutate({
-      id: selectedId,
-      patch: {
-        name: form.name,
-        websiteUrl: form.websiteUrl,
-        businessType: form.businessType || undefined,
-        location: form.location || undefined,
-        description: form.description || undefined,
-        goals: form.goals || undefined,
-      },
+      businessId: selectedId,
+      name: form.name || undefined,
+      url: form.websiteUrl || undefined,
+      businessType: form.businessType || undefined,
+      goals: form.goals || undefined,
+      location: form.location
+        ? { city: form.location }
+        : undefined,
     });
   };
 

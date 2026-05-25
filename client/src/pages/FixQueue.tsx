@@ -8,28 +8,42 @@ import { ClipboardList } from "lucide-react";
 import { Link } from "wouter";
 
 const STATUS_DESCRIPTIONS: Record<FixStatus, string> = {
+  found: "Rina found these — not yet reviewed",
   recommended: "Rina identified these — review and approve when ready",
+  needs_input: "Rina needs more information from you",
   drafted: "Draft content is ready for your review",
+  ready_for_review: "Ready for your final approval",
   approved: "You've approved these — ready to publish",
+  scheduled: "Scheduled for publishing",
   published: "Live — Rina is watching for impact",
   verified: "Confirmed improvement in visibility",
+  deferred: "Deferred — revisit when ready",
+  rejected: "Rejected — no further action",
+  failed: "Publishing failed — needs attention",
 };
 
 export default function FixQueue() {
   const { user } = useAuth();
   const firstName = (user?.name ?? "there").split(" ")[0];
   const { current, selectedId } = useCurrentBusiness();
-  const fixes = trpc.fixes.listByBusiness.useQuery(
+  const fixes = trpc.fixes.list.useQuery(
     { businessId: selectedId! },
     { enabled: !!selectedId }
   );
 
   const byStatus: Record<FixStatus, NonNullable<typeof fixes.data>> = {
+    found: [],
     recommended: [],
+    needs_input: [],
     drafted: [],
+    ready_for_review: [],
     approved: [],
+    scheduled: [],
     published: [],
     verified: [],
+    deferred: [],
+    rejected: [],
+    failed: [],
   };
   (fixes.data ?? []).forEach((f) => {
     const s = f.status as FixStatus;
@@ -92,12 +106,11 @@ export default function FixQueue() {
                 <Link key={f.id} href={`/app/fixes/${f.id}`} className="block">
                   <Card className="rina-card hover:shadow-md transition-shadow cursor-pointer">
                     <CardContent className="p-4">
-                      <div className="font-medium leading-snug text-slate-800 text-sm">{f.title}</div>
-                      <div className="text-xs text-slate-500 mt-1 line-clamp-3">{f.rationale}</div>
+                      <div className="font-medium leading-snug text-slate-800 text-sm">{f.issue}</div>
+                      <div className="text-xs text-slate-500 mt-1 line-clamp-3">{f.recommendation}</div>
                       <div className="text-[11px] text-slate-400 mt-3 flex items-center gap-2">
-                        <span className="capitalize">{f.category}</span>
-                        <span>·</span>
-                        <span className="text-violet-500 font-medium">+{f.impactPoints} pts</span>
+                        <span className="capitalize">{f.impactLevel} impact</span>
+                        {f.targetPlatform && <><span>·</span><span>{f.targetPlatform}</span></>}
                       </div>
                     </CardContent>
                   </Card>
