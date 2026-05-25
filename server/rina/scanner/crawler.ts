@@ -112,16 +112,25 @@ export async function checkAiBotAccess(baseUrl: string): Promise<AiBotAccessResu
 /**
  * Check for llms.txt at the root of the domain.
  * Returns presence, H1, blockquote, H2 sections, and line count.
+ * A 404 response is treated as absent even if the body has content.
  */
 export async function checkLlmsTxt(baseUrl: string): Promise<LlmsTxtResult> {
+  const absent: LlmsTxtResult = { present: false, hasH1: false, hasBlockquote: false, hasH2Sections: false, lineCount: 0 };
   try {
     const url = new URL(baseUrl);
     const llmsUrl = `${url.protocol}//${url.host}/llms.txt`;
-    const content = await fetchText(llmsUrl).catch(() => "");
 
-    if (!content || content.length < 10) {
-      return { present: false, hasH1: false, hasBlockquote: false, hasH2Sections: false, lineCount: 0 };
+    // Fetch with status code so we can reject 404s
+    const { content, statusCode } = await fetchTextWithStatus(llmsUrl).catch(() => ({ content: "", statusCode: 0 }));
+
+    // Only treat as present if the server actually returned 200 OK with content
+    if (statusCode !== 200 || !content || content.length < 10) {
+      return absent;
     }
+
+    // Validate it looks like a markdown llms.txt (not an HTML error page)
+    const isHtml = /<(!DOCTYPE|html|head|body)/i.test(content.slice(0, 200));
+    if (isHtml) return absent;
 
     const lines = content.split("\n");
     return {
@@ -132,8 +141,26 @@ export async function checkLlmsTxt(baseUrl: string): Promise<LlmsTxtResult> {
       lineCount: lines.length,
     };
   } catch {
-    return { present: false, hasH1: false, hasBlockquote: false, hasH2Sections: false, lineCount: 0 };
+    return absent;
   }
+}
+
+/** Internal helper: fetch text and return the HTTP status code alongside the body */
+function fetchTextWithStatus(url: string): Promise<{ content: string; statusCode: number }> {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith("https") ? https : http;
+    const req = lib.get(url, { timeout: 8000 }, (res) => {
+      const statusCode = res.statusCode ?? 0;
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve({ content: data, statusCode }));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error(`Timeout fetching ${url}`));
+    });
+  });
 }
 
 // Fetch robots.txt and check if the given path is allowed
