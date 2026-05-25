@@ -1,222 +1,480 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-// normalizeUrl: ensure URL has https:// prefix
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim();
-  if (!trimmed) return trimmed;
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return `https://${trimmed}`;
-}
+/**
+ * Onboarding — 5-step interview
+ * Step 1: Business basics (name, URL, category, location)
+ * Step 2: Offers and audiences
+ * Step 3: Proof and trust signals
+ * Step 4: Brand voice and goals
+ * Step 5: Confirmation — Rina summarises, user confirms, first scan triggers
+ */
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { getLoginUrl } from "@/const";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { RINA_HERO_IMAGE } from "@/lib/rina";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Loader2,
+  Mic2,
+  Shield,
+  Sparkles,
+  Target,
+} from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface FormState {
+  // Step 1
+  name: string;
+  url: string;
+  industry: string;
+  location: string;
+  // Step 2
+  primaryServices: string;
+  targetAudience: string;
+  problemSolved: string;
+  // Step 3
+  reviewPlatforms: string;
+  proofSignals: string;
+  yearsInBusiness: string;
+  // Step 4
+  brandVoice: string;
+  goals: string;
+  knownCompetitors: string;
+}
+
+const EMPTY: FormState = {
+  name: "",
+  url: "",
+  industry: "",
+  location: "",
+  primaryServices: "",
+  targetAudience: "",
+  problemSolved: "",
+  reviewPlatforms: "",
+  proofSignals: "",
+  yearsInBusiness: "",
+  brandVoice: "",
+  goals: "",
+  knownCompetitors: "",
+};
+
+const STEPS = [
+  { icon: Building2, label: "Your business" },
+  { icon: Target, label: "Offers & audience" },
+  { icon: Shield, label: "Proof & trust" },
+  { icon: Mic2, label: "Voice & goals" },
+  { icon: CheckCircle2, label: "Confirm" },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function Onboarding() {
+  const { user } = useAuth({ redirectOnUnauthenticated: true });
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useAuth();
-  const create = trpc.business.create.useMutation();
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState<FormState>(EMPTY);
+  const [scanning, setScanning] = useState(false);
+
   const utils = trpc.useUtils();
 
-  const [form, setForm] = useState({
-    name: "",
-    websiteUrl: "",
-    businessType: "",
-    location: "",
-    description: "",
-    goals: "",
+  const createBusiness = trpc.business.create.useMutation({
+    onError: (e) => toast.error(e.message),
   });
 
-  const set =
-    (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setForm((s) => ({ ...s, [k]: e.target.value }));
+  const runScan = trpc.scanner.run.useMutation({
+    onError: (e) => toast.error("Scan failed: " + e.message),
+  });
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isAuthenticated) {
-      toast.message("Please sign in first so Rina can save your profile.");
-      window.location.href = getLoginUrl("/onboarding");
-      return;
-    }
-    if (!form.name.trim()) {
-      toast.error("Business name is required.");
-      return;
-    }
-    const cleanUrl = normalizeUrl(form.websiteUrl);
-    if (!cleanUrl) {
-      toast.error("Please enter a valid website (e.g., https://example.com).");
-      return;
-    }
+  const firstName = user?.name?.split(" ")[0] ?? "there";
+
+  function set(key: keyof FormState, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function canAdvance(): boolean {
+    if (step === 0) return form.name.trim().length > 0 && form.url.trim().length > 0;
+    if (step === 1) return form.primaryServices.trim().length > 0;
+    return true;
+  }
+
+  async function handleConfirm() {
+    setScanning(true);
     try {
-      const result = await create.mutateAsync({
+      let url = form.url.trim();
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+
+      // Build audience string from interview answers
+      const audience = [form.targetAudience, form.problemSolved]
+        .filter(Boolean)
+        .join(" — ");
+
+      const biz = await createBusiness.mutateAsync({
         name: form.name.trim(),
-        url: cleanUrl,
-        businessType: form.businessType.trim() || undefined,
+        url,
+        industry: form.industry.trim() || undefined,
+        businessType: form.location.trim() || undefined,
+        audience: audience || undefined,
+        brandVoice: form.brandVoice.trim() || undefined,
         goals: form.goals.trim() || undefined,
       });
-      const id = result.id;
-      utils.business.list.invalidate();
-      localStorage.setItem("rina.currentBusinessId", String(id));
-      toast.success("Living Business Profile created. Rina is ready.");
-      navigate("/app");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create profile.");
-    }
-  };
 
-  return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)' }}>
-      <div className="container py-10 lg:py-16">
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-10 items-start">
-          {/* Left: Rina character + intro */}
-          <div className="hidden lg:flex flex-col items-center text-center sticky top-10">
-            <img
-              src={RINA_HERO_IMAGE}
-              alt="Rina"
-              className="w-72 h-auto drop-shadow-[0_24px_36px_rgba(80,40,160,0.25)]"
+      // Trigger first scan — non-blocking
+      runScan.mutate({ businessId: biz.id });
+
+      await utils.business.list.invalidate();
+      localStorage.setItem("rina.currentBusinessId", String(biz.id));
+      navigate("/app");
+    } catch {
+      setScanning(false);
+    }
+  }
+
+  // ─── Step renderers ──────────────────────────────────────────────────────
+  function renderStep() {
+    switch (step) {
+      case 0:
+        return (
+          <div className="space-y-5">
+            <Heading
+              title={`Hi ${firstName} — let's start with the basics.`}
+              sub="I need to understand your business before I can scan it."
             />
-            <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full">
-              <Sparkles className="h-3 w-3" /> Rina, your AI Visibility Co-Pilot
+            <Field label="Business name *">
+              <Input
+                placeholder="e.g. Sunbeam Services"
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                autoFocus
+              />
+            </Field>
+            <Field label="Website URL *">
+              <Input
+                placeholder="e.g. sunbeamservices.com"
+                value={form.url}
+                onChange={(e) => set("url", e.target.value)}
+              />
+            </Field>
+            <Field label="Industry or category">
+              <Input
+                placeholder="e.g. Home services, Legal, Healthcare"
+                value={form.industry}
+                onChange={(e) => set("industry", e.target.value)}
+              />
+            </Field>
+            <Field label="Primary service area or location">
+              <Input
+                placeholder="e.g. Austin, TX or Greater Boston Area"
+                value={form.location}
+                onChange={(e) => set("location", e.target.value)}
+              />
+            </Field>
+          </div>
+        );
+
+      case 1:
+        return (
+          <div className="space-y-5">
+            <Heading
+              title="What do you do, and for whom?"
+              sub="This is what I'll use to assess whether AI systems describe you accurately."
+            />
+            <Field label="What are your primary services or products? *">
+              <Textarea
+                placeholder="e.g. Residential and commercial HVAC installation, repair, and maintenance"
+                rows={3}
+                value={form.primaryServices}
+                onChange={(e) => set("primaryServices", e.target.value)}
+              />
+            </Field>
+            <Field label="Who do you most want to reach?">
+              <Textarea
+                placeholder="e.g. Homeowners in Austin who need same-day HVAC repair"
+                rows={2}
+                value={form.targetAudience}
+                onChange={(e) => set("targetAudience", e.target.value)}
+              />
+            </Field>
+            <Field label="What problem do you solve for them?">
+              <Textarea
+                placeholder="e.g. We get their system running again the same day, with upfront pricing and no surprises"
+                rows={2}
+                value={form.problemSolved}
+                onChange={(e) => set("problemSolved", e.target.value)}
+              />
+            </Field>
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="space-y-5">
+            <Heading
+              title="Help me understand your credibility."
+              sub="Proof signals are one of the strongest factors in AI recommendation readiness."
+            />
+            <Field label="Where are your reviews?">
+              <Input
+                placeholder="e.g. Google (4.8★, 312 reviews), Yelp, Houzz"
+                value={form.reviewPlatforms}
+                onChange={(e) => set("reviewPlatforms", e.target.value)}
+              />
+            </Field>
+            <Field label="Any press, awards, credentials, or case studies?">
+              <Textarea
+                placeholder="e.g. BBB Accredited, NATE Certified, featured in Austin Business Journal"
+                rows={3}
+                value={form.proofSignals}
+                onChange={(e) => set("proofSignals", e.target.value)}
+              />
+            </Field>
+            <Field label="How long have you been in business?">
+              <Input
+                type="number"
+                placeholder="Years"
+                min={0}
+                max={200}
+                value={form.yearsInBusiness}
+                onChange={(e) => set("yearsInBusiness", e.target.value)}
+                className="max-w-[120px]"
+              />
+            </Field>
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-5">
+            <Heading
+              title="How do you want to sound?"
+              sub="I'll use this to match your voice when I draft content for your approval."
+            />
+            <Field label="How would you describe your tone?">
+              <Input
+                placeholder="e.g. Warm and direct — we're local, not corporate"
+                value={form.brandVoice}
+                onChange={(e) => set("brandVoice", e.target.value)}
+              />
+            </Field>
+            <Field label="What is your biggest visibility goal right now?">
+              <Textarea
+                placeholder="e.g. Show up when someone in Austin asks ChatGPT for HVAC repair"
+                rows={2}
+                value={form.goals}
+                onChange={(e) => set("goals", e.target.value)}
+              />
+            </Field>
+            <Field label="Any competitors you are aware of?">
+              <Input
+                placeholder="e.g. CoolBreeze HVAC, Austin Air Pros"
+                value={form.knownCompetitors}
+                onChange={(e) => set("knownCompetitors", e.target.value)}
+              />
+            </Field>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="space-y-5">
+            <Heading
+              title="Here is what I understand about your business."
+              sub="Before I scan, confirm this is correct. You can edit any field."
+            />
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 divide-y divide-slate-200 text-sm">
+              <SummaryRow label="Business" value={form.name} onEdit={() => setStep(0)} />
+              <SummaryRow label="Website" value={form.url} onEdit={() => setStep(0)} />
+              {form.industry && (
+                <SummaryRow label="Industry" value={form.industry} onEdit={() => setStep(0)} />
+              )}
+              {form.location && (
+                <SummaryRow label="Location" value={form.location} onEdit={() => setStep(0)} />
+              )}
+              <SummaryRow
+                label="Primary services"
+                value={form.primaryServices}
+                onEdit={() => setStep(1)}
+              />
+              {form.targetAudience && (
+                <SummaryRow
+                  label="Target audience"
+                  value={form.targetAudience}
+                  onEdit={() => setStep(1)}
+                />
+              )}
+              {form.problemSolved && (
+                <SummaryRow
+                  label="Problem solved"
+                  value={form.problemSolved}
+                  onEdit={() => setStep(1)}
+                />
+              )}
+              {form.reviewPlatforms && (
+                <SummaryRow
+                  label="Reviews"
+                  value={form.reviewPlatforms}
+                  onEdit={() => setStep(2)}
+                />
+              )}
+              {form.proofSignals && (
+                <SummaryRow
+                  label="Proof signals"
+                  value={form.proofSignals}
+                  onEdit={() => setStep(2)}
+                />
+              )}
+              {form.yearsInBusiness && (
+                <SummaryRow
+                  label="Years in business"
+                  value={`${form.yearsInBusiness} years`}
+                  onEdit={() => setStep(2)}
+                />
+              )}
+              {form.brandVoice && (
+                <SummaryRow
+                  label="Tone"
+                  value={form.brandVoice}
+                  onEdit={() => setStep(3)}
+                />
+              )}
+              {form.goals && (
+                <SummaryRow
+                  label="Visibility goal"
+                  value={form.goals}
+                  onEdit={() => setStep(3)}
+                />
+              )}
             </div>
-            <p className="text-sm text-muted-foreground mt-3 leading-relaxed max-w-[260px]">
-              "Tell me about your business and I'll start mapping how AI sees you
-              today — and how we improve it together."
+            <p className="text-sm text-slate-500">
+              Once you confirm, I'll run my first scan of{" "}
+              <span className="font-medium text-slate-700">{form.url || "your website"}</span>.
+              This takes about 30 seconds. Your Weekly Meeting will be ready when it's done.
             </p>
           </div>
+        );
 
-          {/* Right: form */}
-          <div>
-            <div className="lg:hidden flex items-center gap-3 mb-6">
-              <img
-                src={RINA_HERO_IMAGE}
-                alt="Rina"
-                className="h-16 w-auto"
-              />
-              <div>
-                <div className="text-xs font-medium text-primary uppercase tracking-widest">
-                  Step 1 of 1
-                </div>
-                <div className="font-display text-2xl leading-tight">
-                  Let's build your Living Business Profile
-                </div>
-              </div>
-            </div>
-            <div className="hidden lg:block mb-6">
-              <div className="text-xs font-medium text-primary uppercase tracking-widest mb-2">
-                Step 1 of 1 · Living Business Profile
-              </div>
-              <h1 className="font-display text-4xl rina-gradient-text leading-tight">
-                Let's introduce Rina to your business.
-              </h1>
-              <p className="text-muted-foreground mt-2 max-w-2xl">
-                This profile is the foundation Rina builds everything from — your
-                scans, scores, recommendations, and weekly briefings. It only takes
-                a minute.
-              </p>
-            </div>
+      default:
+        return null;
+    }
+  }
 
-            <Card className="rina-card">
-              <CardContent className="p-6 sm:p-8">
-                {!authLoading && !isAuthenticated && (
-                  <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-3">
-                    <Sparkles className="h-4 w-4 mt-0.5 shrink-0" />
-                    <div className="flex-1">
-                      Sign in first so Rina can save your profile to your account.
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-white"
-                      onClick={() => {
-                        window.location.href = getLoginUrl("/onboarding");
-                      }}
-                    >
-                      Sign in
-                    </Button>
-                  </div>
-                )}
-                <form onSubmit={onSubmit} className="space-y-5">
-                  <Field id="name" label="Business name" required>
-                    <Input
-                      id="name"
-                      value={form.name}
-                      onChange={set("name")}
-                      placeholder="e.g., Brimm & Co."
-                      autoComplete="organization"
-                    />
-                  </Field>
-                  <Field
-                    id="websiteUrl"
-                    label="Website URL"
-                    required
-                    hint="We'll add https:// if you forget it."
+  // ─── Layout ──────────────────────────────────────────────────────────────
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center px-4 py-12"
+      style={{
+        background: "linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)",
+      }}
+    >
+      <div className="w-full max-w-lg">
+        {/* Progress */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            {STEPS.map((s, i) => {
+              const Icon = s.icon;
+              const done = i < step;
+              const active = i === step;
+              return (
+                <button
+                  key={i}
+                  onClick={() => i < step && setStep(i)}
+                  disabled={i >= step}
+                  className={cn(
+                    "flex flex-col items-center gap-1 transition-opacity",
+                    i > step && "opacity-30",
+                    i < step && "cursor-pointer"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "h-9 w-9 rounded-full flex items-center justify-center transition-all",
+                      done
+                        ? "bg-violet-600 text-white shadow-md"
+                        : active
+                        ? "bg-white border-2 border-violet-600 text-violet-600 shadow-md"
+                        : "bg-white/60 border border-slate-200 text-slate-400"
+                    )}
                   >
-                    <Input
-                      id="websiteUrl"
-                      value={form.websiteUrl}
-                      onChange={set("websiteUrl")}
-                      placeholder="example.com"
-                      autoComplete="url"
-                      inputMode="url"
-                    />
-                  </Field>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Field id="businessType" label="Business type">
-                      <Input
-                        id="businessType"
-                        value={form.businessType}
-                        onChange={set("businessType")}
-                        placeholder="Boutique studio, consultancy, retail…"
-                      />
-                    </Field>
-                    <Field id="location" label="Primary location">
-                      <Input
-                        id="location"
-                        value={form.location}
-                        onChange={set("location")}
-                        placeholder="City, region or 'remote'"
-                      />
-                    </Field>
+                    {done ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <Icon className="h-4 w-4" />
+                    )}
                   </div>
-                  <Field id="description" label="What you do, in plain words">
-                    <Textarea
-                      id="description"
-                      rows={3}
-                      value={form.description}
-                      onChange={set("description")}
-                      placeholder="A short, owner-voice description Rina can reference everywhere."
-                    />
-                  </Field>
-                  <Field id="goals" label="What success looks like this quarter">
-                    <Textarea
-                      id="goals"
-                      rows={3}
-                      value={form.goals}
-                      onChange={set("goals")}
-                      placeholder="More inbound calls, AI citations, qualified leads…"
-                    />
-                  </Field>
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      type="submit"
-                      size="lg"
-                      disabled={create.isPending || authLoading}
-                    >
-                      {create.isPending ? "Saving…" : "Create profile & continue"}
-                      <ArrowRight className="ml-1.5 h-4 w-4" />
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+                  <span
+                    className={cn(
+                      "text-[10px] font-medium hidden sm:block",
+                      active ? "text-violet-700" : "text-slate-400"
+                    )}
+                  >
+                    {s.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="h-1 bg-white/50 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-violet-600 rounded-full transition-all duration-500"
+              style={{ width: `${(step / (STEPS.length - 1)) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-3xl shadow-2xl p-8">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center text-white font-display text-base shadow">
+              R
+            </div>
+            <span className="text-sm font-medium text-slate-500">Agent Rina</span>
+          </div>
+
+          {renderStep()}
+
+          <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-100">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setStep((s) => s - 1)}
+              disabled={step === 0}
+              className="text-slate-500"
+            >
+              <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
+            </Button>
+
+            {step < 4 ? (
+              <Button
+                onClick={() => setStep((s) => s + 1)}
+                disabled={!canAdvance()}
+                className="bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                Continue <ArrowRight className="ml-1.5 h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleConfirm}
+                disabled={scanning || createBusiness.isPending}
+                className="bg-violet-600 hover:bg-violet-700 text-white min-w-[160px]"
+              >
+                {scanning || createBusiness.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting scan…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Confirm &amp; scan
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -224,26 +482,45 @@ export default function Onboarding() {
   );
 }
 
-function Field({
-  id,
-  label,
-  required,
-  hint,
-  children,
-}: {
-  id: string;
-  label: string;
-  required?: boolean;
-  hint?: string;
-  children: React.ReactNode;
-}) {
+function Heading({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="space-y-1">
+      <h2 className="font-display text-2xl text-slate-800 leading-tight">{title}</h2>
+      <p className="text-sm text-slate-500">{sub}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-sm">
-        {label} {required && <span className="text-destructive">*</span>}
-      </Label>
+      <Label className="text-sm font-medium text-slate-700">{label}</Label>
       {children}
-      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  onEdit,
+}: {
+  label: string;
+  value: string;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 px-4 py-3">
+      <span className="text-slate-400 w-32 shrink-0 text-xs font-medium uppercase tracking-wide pt-0.5">
+        {label}
+      </span>
+      <span className="flex-1 text-slate-700 text-sm leading-relaxed">{value}</span>
+      <button
+        onClick={onEdit}
+        className="text-violet-600 text-xs font-medium hover:underline shrink-0"
+      >
+        Edit
+      </button>
     </div>
   );
 }

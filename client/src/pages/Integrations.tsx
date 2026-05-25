@@ -1,4 +1,3 @@
-import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -100,7 +99,7 @@ export default function Integrations() {
   const categories = Array.from(new Set(CONNECTORS.map((c) => c.category)));
 
   return (
-    <RinaLayout>
+    <div>
       <div className="max-w-3xl space-y-8">
         {/* Page header */}
         <div>
@@ -180,6 +179,6 @@ export default function Integrations() {
           );
         })}
       </div>
-    </RinaLayout>
+    </div>
   );
 }

@@ -1,4 +1,3 @@
-import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -82,7 +81,7 @@ export default function Briefing() {
   const data = briefing.data;
 
   return (
-    <RinaLayout>
+    <div>
       {/* Rina-voice header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
@@ -222,6 +221,6 @@ export default function Briefing() {
           </CardContent>
         </Card>
       )}
-    </RinaLayout>
+    </div>
   );
 }

@@ -1,4 +1,3 @@
-import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +61,7 @@ export default function Scorecard() {
   };
 
   return (
-    <RinaLayout>
+    <div>
       {/* Rina-voice header */}
       <div className="mb-6">
         <div className="text-xs font-semibold text-violet-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
@@ -261,6 +260,6 @@ export default function Scorecard() {
           )}
         </div>
       )}
-    </RinaLayout>
+    </div>
   );
 }

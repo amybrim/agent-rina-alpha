@@ -1,4 +1,3 @@
-import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -37,7 +36,7 @@ export default function Settings() {
   const tier = (meQuery.data?.subscriptionTier ?? "starter") as string;
 
   return (
-    <RinaLayout>
+    <div>
       <div className="max-w-2xl space-y-6">
         {/* Page header */}
         <div>
@@ -197,6 +196,6 @@ export default function Settings() {
           </Button>
         </div>
       </div>
-    </RinaLayout>
+    </div>
   );
 }

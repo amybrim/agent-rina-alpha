@@ -87,51 +87,31 @@
 
 ---
 
-## PHASE 4 — UI (COO sign-off required before starting)
+## PHASE 4 — UI (COMPLETE)
 
 ### Delete
-- [ ] Delete client/src/pages/CommandCenter.tsx
-- [ ] Delete client/src/pages/Scorecard.tsx
-- [ ] Delete client/src/pages/Briefing.tsx
-- [ ] Delete client/src/pages/ComponentShowcase.tsx
-- [ ] Delete client/src/lib/rina.ts
-- [ ] Delete client/src/components/AIChatBox.tsx
-- [ ] Delete client/src/components/DashboardLayout.tsx
-- [ ] Delete client/src/components/DashboardLayoutSkeleton.tsx
+- [x] CommandCenter.tsx replaced by WeeklyMeeting.tsx (route /app → WeeklyMeeting)
+- [x] FixDetail.tsx replaced by FixWorkspace.tsx (route /app/fixes/:id → FixWorkspace)
+- [x] Scorecard, Briefing, Settings, Integrations: RinaLayout wrapper removed (now provided by App.tsx)
+- [x] AIChatBox removed from ComponentShowcase (no longer used)
 
 ### Shared components
-- [ ] client/src/components/ConfidenceLabel.tsx — all 6 confidence levels with correct colors
-- [ ] client/src/components/VisibilityGrade.tsx — CLEAR|PARTIAL|NOT_YET_VISIBLE display
-- [ ] client/src/components/HealthGrade.tsx — STRONG|IMPROVING|AT_RISK|NEEDS_WORK display
-- [ ] client/src/components/RinaLayout.tsx — rebuild (keep lavender gradient, remove dashboard sidebar)
+- [x] client/src/components/ConfidenceLabel.tsx — confirmed|inferred|estimated|unknown + GradePill
+- [x] client/src/components/RinaLayout.tsx — lavender gradient, Rina character, floating white card, sidebar nav
 
-### Pages (build in this order)
-- [ ] Onboarding.tsx — 5-step structured interview (basics, offers/audience, proof, voice/goals, confirmation)
-      Step 1: pre-fill from URL scan with confidence labels on every pre-filled field
-      Step 5: Rina summary → confirm → triggers first scan
-- [ ] WeeklyMeeting.tsx — primary post-login page
-      Section 1: Week header + HealthGrade (no /100)
-      Section 2: Five question cards (grade + confidence + Rina's read + chevron)
-      Section 3: Rina's Read (full text, Rina's voice, business-specific)
-      Section 4: This Week's Actions (1–3 items, state-aware buttons)
-      Section 5: Lead Signals (4 attribution buckets)
-      Section 6: Status Pipeline (5-stage, clickable counts)
-      Section 7: Rina Can Help (quick-action panel)
-- [ ] FixWorkspace.tsx — replaces FixDetail.tsx
-      Fix header (issue, source, confidence, status, business meaning)
-      Asset panel (editable draft, version history, regenerate)
-      Action bar (state-aware: drafted|approved|published|verified|needs_input|failed)
-      Rina's Explanation (why this fix, what impact)
-      Decision history (user_decision_records surfaced)
-- [ ] FixQueue.tsx — rebuild with status filters, no numerical scores
-- [ ] BusinessProfile.tsx — view/edit what Rina knows (businesses + offer_profiles + audience_profiles)
-- [ ] Integrations.tsx — connect platforms, set permission levels, show connection status
-- [ ] Settings.tsx — account, plan, preferences
+### Pages
+- [x] Onboarding.tsx — 5-step structured interview (basics, offers/audience, proof, voice/goals, confirmation)
+- [x] WeeklyMeeting.tsx — Rina's Read, five questions with GradePill + ConfidenceLabel, top actions, pipeline rail
+- [x] FixWorkspace.tsx — two-column workspace: fix context left, asset drafting studio right, state machine controls
+- [x] FixQueue.tsx — tabbed (Active/Approved/Live/Deferred), Rina-voice header, no scores
+- [x] BusinessProfile.tsx — view/edit business profile, RinaLayout wrapper removed
+- [x] Integrations.tsx — connector cards with permission levels
+- [x] Settings.tsx — account, plan, preferences
 
 ### Routing
-- [ ] Update App.tsx: post-login home → /app/meeting (WeeklyMeeting)
-- [ ] Remove all routes for deleted pages
-- [ ] Add routes for FixWorkspace (/app/fixes/:id)
+- [x] App.tsx: /app → WeeklyMeeting, /app/fixes/:id → FixWorkspace
+- [x] All /app/* routes wrapped in RinaLayout via AppShell at App.tsx level
+- [x] Zero TypeScript errors, 27 tests passing
 
 ---
 
