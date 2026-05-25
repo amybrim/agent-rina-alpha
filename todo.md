@@ -145,5 +145,9 @@
 - [x] Fix sdk.ts buildCronUser to use correct User type shape (int id, openId field)
 - [x] Zero TypeScript errors after all fixes
 - [x] 27 vitest tests passing after all fixes
+- [x] Fix businesses table: drop old-structure table (ownerId/websiteUrl) and recreate with correct schema (user_id/url) from migration 0002
+- [x] Apply all pending migrations (0001, 0002, 0003) and mark as applied in __drizzle_migrations
+- [x] Remove duplicate snake_case columns (login_method, last_signed_in) from users table
+- [x] Zero TypeScript errors, 27 tests passing after full migration fix
 - [ ] Live end-to-end test: sign in → onboard insightfulrina.com → run scan → verify findings appear in DB → approve a fix → verify state machine transitions
 - [ ] Push final state to GitHub
