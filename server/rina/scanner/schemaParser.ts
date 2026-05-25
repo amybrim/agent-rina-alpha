@@ -1,7 +1,24 @@
+/**
+ * schemaParser.ts — Rina Scanner Schema Extraction
+ *
+ * Data integrity rules enforced here:
+ *
+ * Rule 3: Uses node-html-parser (a proper HTML parser) to extract
+ *   <script type="application/ld+json"> blocks. No regex is used to
+ *   parse HTML structure. The raw JSON-LD text is stored verbatim so
+ *   it can be audited.
+ *
+ * Rule 5: All schema findings are confidence:detected — the schema
+ *   was either present in the fetched HTML or it was not. There is
+ *   no inference here.
+ */
+
+import { parse } from "node-html-parser";
+
 export interface SchemaResult {
   present: boolean;
-  types: string[];
   valid: boolean;
+  types: string[];
   hasFAQ: boolean;
   hasLocalBusiness: boolean;
   hasOrganization: boolean;
@@ -9,15 +26,23 @@ export interface SchemaResult {
   hasProduct: boolean;
   hasBreadcrumb: boolean;
   hasReview: boolean;
+  /** Raw JSON-LD text of the first block found — stored for audit purposes */
   raw: string | null;
+  /** All raw JSON-LD blocks found on the page — stored for full audit */
+  allRaw: string[];
   errors: string[];
 }
 
+/**
+ * Parse all JSON-LD schema blocks from HTML using a proper HTML parser.
+ * Rule 3: No regex used to extract HTML structure.
+ * Rule 5: Returns detected confidence — this is a direct read of the HTML.
+ */
 export function parseSchema(html: string): SchemaResult {
   const result: SchemaResult = {
     present: false,
-    types: [],
     valid: false,
+    types: [],
     hasFAQ: false,
     hasLocalBusiness: false,
     hasOrganization: false,
@@ -26,21 +51,39 @@ export function parseSchema(html: string): SchemaResult {
     hasBreadcrumb: false,
     hasReview: false,
     raw: null,
+    allRaw: [],
     errors: [],
   };
 
-  // Extract all JSON-LD blocks
-  const jsonLdRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  const allBlocks: string[] = [];
-  let match: RegExpExecArray | null;
+  if (!html) return result;
 
-  while ((match = jsonLdRegex.exec(html)) !== null) {
-    allBlocks.push(match[1].trim());
+  // Use node-html-parser to find all <script type="application/ld+json"> elements
+  let root;
+  try {
+    root = parse(html, {
+      lowerCaseTagName: false,
+      comment: false,
+      blockTextElements: {
+        script: true,
+        noscript: false,
+        style: false,
+        pre: false,
+      },
+    });
+  } catch (err) {
+    result.errors.push(`HTML parse error: ${err instanceof Error ? err.message : String(err)}`);
+    return result;
   }
 
-  if (allBlocks.length === 0) {
-    // Check for microdata as fallback
-    const hasMicrodata = /itemtype=["']https?:\/\/schema\.org\//i.test(html);
+  // Select all script elements with type="application/ld+json"
+  const scriptElements = root.querySelectorAll('script[type="application/ld+json"]');
+
+  if (scriptElements.length === 0) {
+    // Check for microdata as fallback — detect via attribute presence
+    const microdataElements = root.querySelectorAll("[itemtype]");
+    const hasMicrodata = microdataElements.some((el) =>
+      (el.getAttribute("itemtype") ?? "").includes("schema.org"),
+    );
     if (hasMicrodata) {
       result.present = true;
       result.valid = true;
@@ -50,11 +93,17 @@ export function parseSchema(html: string): SchemaResult {
   }
 
   result.present = true;
-  result.raw = allBlocks[0]; // Store first block as sample
 
-  for (const block of allBlocks) {
+  for (const scriptEl of scriptElements) {
+    // node-html-parser exposes rawText for script elements when blockTextElements.script = true
+    const rawText = (scriptEl.rawText ?? scriptEl.text ?? "").trim();
+    if (!rawText) continue;
+
+    result.allRaw.push(rawText);
+    if (!result.raw) result.raw = rawText; // Store first block as the primary sample
+
     try {
-      const parsed = JSON.parse(block);
+      const parsed = JSON.parse(rawText);
       const schemas = Array.isArray(parsed) ? parsed : [parsed];
 
       for (const schema of schemas) {
@@ -66,8 +115,12 @@ export function parseSchema(html: string): SchemaResult {
 
         const typeLower = typeStr.toLowerCase();
         if (typeLower.includes("faqpage")) result.hasFAQ = true;
-        if (typeLower.includes("localbusiness") || typeLower.includes("restaurant") ||
-            typeLower.includes("store") || typeLower.includes("medicalorganization")) {
+        if (
+          typeLower.includes("localbusiness") ||
+          typeLower.includes("restaurant") ||
+          typeLower.includes("store") ||
+          typeLower.includes("medicalorganization")
+        ) {
           result.hasLocalBusiness = true;
         }
         if (typeLower.includes("organization") || typeLower.includes("corporation")) {
@@ -83,7 +136,9 @@ export function parseSchema(html: string): SchemaResult {
 
       result.valid = true;
     } catch (err) {
-      result.errors.push(`JSON-LD parse error: ${err instanceof Error ? err.message : String(err)}`);
+      result.errors.push(
+        `JSON-LD parse error: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

@@ -164,3 +164,22 @@
 - [x] Update scanWorkflow.ts: map each GEO category finding to correct findingType for downstream grading
 - [x] Run TypeScript check and all tests after changes (0 errors, 27 tests passing)
 - [x] Save checkpoint
+
+---
+
+## Data Integrity Rules (Non-Negotiable — Before GEO Evaluator)
+
+- [ ] Rule 1: Replace fetchText/fetchHtml with prerender-aware fetch; confirm real content (not error page, not empty) before any analysis runs
+- [ ] Rule 1: Add content validation gate — if fetched HTML is < 500 chars or is an error page, mark scan page as crawl_failed and skip analysis
+- [ ] Rule 3: Replace all regex-based schema parsing with node-html-parser; store raw schema JSON in DB for audit
+- [ ] Rule 3: Replace all regex-based metadata parsing with node-html-parser
+- [ ] Rule 5: Add confidence column (detected/inferred/unknown) to visibility_findings table and apply migration
+- [ ] Rule 5: Every finding emitted by scanWorkflow must carry the correct confidence label — never label inferred signals as detected
+- [ ] Rule 5: GEO category findings from HTML analysis = inferred (Rina is interpreting signals, not reading a declared value)
+- [ ] Rule 5: robots.txt/llms.txt findings = detected (Rina fetched the file directly)
+- [ ] Rule 5: Schema/metadata findings = detected (parsed from actual fetched HTML)
+- [ ] Rule 2: All AI platform findings (ChatGPT/Perplexity mention checks) must be confidence:unknown until a real prompt_test_results row exists
+- [ ] Rule 2: Remove any code that infers or fabricates AI platform mention results
+- [ ] Rule 4: GBP/review findings must be labeled confidence:unknown when no GBP integration is connected for that business
+- [ ] Run TypeScript check and all tests after changes
+- [ ] Save checkpoint

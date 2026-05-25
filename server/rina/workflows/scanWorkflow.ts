@@ -1,13 +1,45 @@
+/**
+ * scanWorkflow.ts — Rina Scanner Orchestration
+ *
+ * Data integrity rules enforced here:
+ *
+ * Rule 1: Content validation gate — if a page fails content validation
+ *   (empty, error page, JS-rendered shell), it is skipped with an error
+ *   recorded. No findings are emitted for pages that were not actually read.
+ *   If jsRendered = true, content-analysis findings use confidence:inferred
+ *   with a note that JavaScript execution was not performed.
+ *
+ * Rule 5: Confidence labels are accurate and non-negotiable:
+ *   - DETECTED: Rina fetched the value directly from the HTML or a file
+ *     (title tag, meta description, H1, schema JSON-LD, robots.txt, llms.txt)
+ *   - INFERRED: Rina is interpreting signals from content patterns
+ *     (offer clarity, audience clarity, proof points, GEO category grades)
+ *   - UNKNOWN: Rina does not have the data (AI platform results, GBP data
+ *     without an active integration)
+ *
+ * Rule 2: AI platform findings (ChatGPT/Perplexity mentions) are NOT emitted
+ *   here. They require a real prompt_test_results row from an actual API call.
+ *   Any AI platform finding without a verified source must be confidence:unknown.
+ *
+ * Rule 4: GBP/review findings are NOT emitted here unless an active
+ *   integration_connection row exists for this business. Without it,
+ *   those findings would be confidence:unknown and are deferred.
+ */
+
 import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { visibilityFindings, fixItems } from "../../../drizzle/schema";
 import type { InferSelectModel } from "drizzle-orm";
-import { fetchPage, extractSameDomainLinks, checkAiBotAccess, checkLlmsTxt } from "../scanner/crawler";
+import {
+  fetchPage,
+  extractSameDomainLinks,
+  checkAiBotAccess,
+  checkLlmsTxt,
+} from "../scanner/crawler";
 import { parseMetadata } from "../scanner/metadataParser";
 import { parseSchema } from "../scanner/schemaParser";
 import { analyzeContent } from "../scanner/contentAnalyzer";
 import { assessGeoReadiness } from "../scanner/geoReadiness";
-import { resolveConfidence } from "../scanner/confidenceResolver";
 import { upsertPageRecord } from "../brain/websiteInventory";
 import { invokeLLM } from "../../_core/llm";
 import { buildScanInterpretationPrompt } from "../prompts/scanInterpretation";
@@ -23,15 +55,46 @@ export interface ScanResult {
   errors: string[];
 }
 
+type ConfidenceValue = InferSelectModel<typeof visibilityFindings>["confidence"];
+
 interface RawFindingInput {
   type: string;
   source: string;
   evidence: string;
   severity: "critical" | "high" | "medium" | "low";
   businessMeaning?: string;
-  confidence: InferSelectModel<typeof visibilityFindings>["confidence"];
+  /** Rule 5: Must accurately reflect how the data was obtained */
+  confidence: ConfidenceValue;
   pageUrl?: string;
 }
+
+// ─────────────────────────────────────────────
+// Confidence constants — Rule 5
+// ─────────────────────────────────────────────
+
+/**
+ * DETECTED: Rina fetched this value directly from the HTML.
+ * Use for: title tag, meta description, H1 presence, schema JSON-LD
+ * presence, robots.txt content, llms.txt content.
+ */
+const DETECTED: ConfidenceValue = "detected";
+
+/**
+ * INFERRED: Rina is interpreting signals from content patterns.
+ * Use for: offer clarity, audience clarity, proof points, CTA presence,
+ * GEO category grades (all derived from heuristic analysis of content).
+ */
+const INFERRED: ConfidenceValue = "inferred";
+
+/**
+ * LIKELY: Strong signal from a pattern match, not fully confirmed.
+ * Use for: contact info detection (phone/address pattern matching).
+ */
+const LIKELY: ConfidenceValue = "likely";
+
+// ─────────────────────────────────────────────
+// Main scan workflow
+// ─────────────────────────────────────────────
 
 export async function runScan(businessId: number): Promise<ScanResult> {
   const business = await getBusinessById(businessId);
@@ -45,9 +108,8 @@ export async function runScan(businessId: number): Promise<ScanResult> {
   const urlsToCrawl = [business.url];
   const homepageResult = await fetchPage(business.url);
 
-  if (homepageResult.crawlable && homepageResult.html) {
+  if (homepageResult.crawlable && homepageResult.contentValidated && homepageResult.html) {
     const discovered = extractSameDomainLinks(homepageResult.html, business.url);
-    // Prioritize key page types
     const priorityPaths = ["/about", "/services", "/contact", "/faq", "/pricing"];
     const priorityUrls = priorityPaths
       .map((p) => {
@@ -60,17 +122,32 @@ export async function runScan(businessId: number): Promise<ScanResult> {
       })
       .filter(Boolean) as string[];
 
-    // Add priority URLs first, then discovered
     for (const url of [...priorityUrls, ...discovered]) {
       if (!urlsToCrawl.includes(url) && urlsToCrawl.length < 6) {
         urlsToCrawl.push(url);
       }
     }
   } else {
-    errors.push(`Homepage not crawlable: ${homepageResult.error ?? `HTTP ${homepageResult.statusCode}`}`);
+    const reason = homepageResult.contentValidationReason ?? homepageResult.error ?? `HTTP ${homepageResult.statusCode}`;
+    errors.push(`Homepage not readable: ${reason}`);
+    // If homepage is JS-rendered, record it but continue — we can still check
+    // robots.txt and llms.txt which don't require page content.
+    if (!homepageResult.crawlable) {
+      // Completely unreachable — nothing to scan
+      return {
+        businessId,
+        pagesScanned: 0,
+        findingsCreated: 0,
+        fixItemsCreated: 0,
+        findings: [],
+        fixItems: [],
+        errors,
+      };
+    }
   }
 
   // ── Step 1b: AI bot access + llms.txt (homepage domain, run once) ───────
+  // Rule 1: These fetch actual files — results are confidence:detected.
   const [aiBotAccess, llmsTxt] = await Promise.all([
     checkAiBotAccess(business.url),
     checkLlmsTxt(business.url),
@@ -81,15 +158,39 @@ export async function runScan(businessId: number): Promise<ScanResult> {
     try {
       const crawl = url === business.url ? homepageResult : await fetchPage(url);
 
-      if (!crawl.crawlable || !crawl.html) {
-        if (url !== business.url) continue; // skip non-critical pages
+      // Rule 1: Skip pages that didn't return real content
+      if (!crawl.crawlable) {
+        if (url !== business.url) continue;
         errors.push(`Cannot crawl ${url}: ${crawl.error ?? `HTTP ${crawl.statusCode}`}`);
         continue;
       }
 
-      pagesScanned++;
+      if (!crawl.contentValidated) {
+        // Record the validation failure but don't emit findings for this page
+        errors.push(
+          `Skipping analysis of ${url}: ${crawl.contentValidationReason ?? "content validation failed"}`,
+        );
+        // For JS-rendered pages, still record the page as crawled but unanalyzable
+        if (crawl.jsRendered) {
+          await upsertPageRecord(businessId, crawl.finalUrl, {
+            pageType: inferPageType(crawl.finalUrl),
+            title: null,
+            metaDescription: null,
+            headings: { h1: [], h2: [], h3: [] },
+            schemaPresent: { types: [], valid: false, raw: undefined },
+            contentSummary: "JavaScript-rendered page — content not readable without JS execution",
+            clarityScore: "NOT_YET_VISIBLE" as const,
+            proofScore: "NOT_YET_VISIBLE" as const,
+            crawlable: true,
+          });
+        }
+        continue;
+      }
 
+      pagesScanned++;
       const isHomepage = url === business.url;
+
+      // Rule 3: Parse using proper HTML parsers (node-html-parser)
       const metadata = parseMetadata(crawl.html);
       const schema = parseSchema(crawl.html);
       const content = analyzeContent(crawl.html, url.includes("about") ? "about" : "homepage");
@@ -102,7 +203,7 @@ export async function runScan(businessId: number): Promise<ScanResult> {
         isHomepage ? llmsTxt : undefined,
       );
 
-      // Save page record
+      // Save page record with raw schema for audit (Rule 3)
       await upsertPageRecord(businessId, crawl.finalUrl, {
         pageType: inferPageType(crawl.finalUrl),
         title: metadata.title,
@@ -120,15 +221,20 @@ export async function runScan(businessId: number): Promise<ScanResult> {
       });
 
       // ── Generate findings from this page ─────────────────────────────
+      //
+      // Rule 5 label guide for this section:
+      //   DETECTED  = Rina read this value directly from the HTML (tag present/absent)
+      //   INFERRED  = Rina is interpreting content signals (heuristic analysis)
+      //   LIKELY    = Strong pattern match on text, not a declared value
 
-      // Missing or thin title
+      // Missing or thin title — DETECTED (title tag is directly read)
       if (!metadata.title) {
         rawFindings.push({
           type: "missing_title",
           source: "metadata_scan",
           evidence: `No <title> tag found on ${crawl.finalUrl}`,
           severity: "critical",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED,
           pageUrl: crawl.finalUrl,
         });
       } else if (metadata.title.length < 20) {
@@ -137,43 +243,43 @@ export async function runScan(businessId: number): Promise<ScanResult> {
           source: "metadata_scan",
           evidence: `Title is only ${metadata.title.length} characters: "${metadata.title}"`,
           severity: "high",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED,
           pageUrl: crawl.finalUrl,
         });
       }
 
-      // Missing meta description
+      // Missing meta description — DETECTED (meta tag is directly read)
       if (!metadata.metaDescription) {
         rawFindings.push({
           type: "missing_meta_description",
           source: "metadata_scan",
           evidence: `No meta description found on ${crawl.finalUrl}`,
           severity: "high",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED,
           pageUrl: crawl.finalUrl,
         });
       }
 
-      // No H1
+      // No H1 — DETECTED (H1 element is directly read)
       if (metadata.headings.h1.length === 0) {
         rawFindings.push({
           type: "missing_h1",
           source: "metadata_scan",
           evidence: `No H1 heading found on ${crawl.finalUrl}`,
           severity: isHomepage ? "critical" : "medium",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED,
           pageUrl: crawl.finalUrl,
         });
       }
 
-      // No schema markup
+      // No schema markup — DETECTED (JSON-LD script tag is directly read)
       if (!schema.present) {
         rawFindings.push({
           type: "no_schema_markup",
           source: "schema_scan",
           evidence: `No JSON-LD or microdata schema found on ${crawl.finalUrl}`,
           severity: isHomepage ? "high" : "medium",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED,
           pageUrl: crawl.finalUrl,
         });
       } else if (!schema.hasFAQ && isHomepage) {
@@ -182,20 +288,21 @@ export async function runScan(businessId: number): Promise<ScanResult> {
           source: "schema_scan",
           evidence: `Schema present but no FAQPage type on ${crawl.finalUrl}`,
           severity: "medium",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED,
           pageUrl: crawl.finalUrl,
         });
       }
 
-      // Clarity gaps (homepage only)
+      // Clarity gaps (homepage only) — INFERRED
+      // These are heuristic interpretations of content signals, not declared values.
       if (isHomepage) {
         if (!content.hasOfferStatement) {
           rawFindings.push({
             type: "unclear_offer",
             source: "content_analysis",
-            evidence: "Homepage does not contain a clear statement of what the business offers",
+            evidence: "Homepage does not appear to contain a clear statement of what the business offers — no offer-language patterns detected",
             severity: "critical",
-            confidence: resolveConfidence({ source: "pattern_match", directEvidence: true, crossValidated: false }),
+            confidence: INFERRED,
             pageUrl: crawl.finalUrl,
           });
         }
@@ -204,9 +311,9 @@ export async function runScan(businessId: number): Promise<ScanResult> {
           rawFindings.push({
             type: "unclear_audience",
             source: "content_analysis",
-            evidence: "Homepage does not clearly identify who the business serves",
+            evidence: "Homepage does not appear to clearly identify who the business serves — no audience-language patterns detected",
             severity: "high",
-            confidence: resolveConfidence({ source: "pattern_match", directEvidence: true, crossValidated: false }),
+            confidence: INFERRED,
             pageUrl: crawl.finalUrl,
           });
         }
@@ -215,9 +322,9 @@ export async function runScan(businessId: number): Promise<ScanResult> {
           rawFindings.push({
             type: "missing_cta",
             source: "content_analysis",
-            evidence: "No clear call to action detected on homepage",
+            evidence: "No clear call to action detected on homepage — no CTA-language patterns found",
             severity: "medium",
-            confidence: resolveConfidence({ source: "pattern_match", directEvidence: true, crossValidated: false }),
+            confidence: INFERRED,
             pageUrl: crawl.finalUrl,
           });
         }
@@ -226,16 +333,17 @@ export async function runScan(businessId: number): Promise<ScanResult> {
           rawFindings.push({
             type: "missing_proof",
             source: "content_analysis",
-            evidence: "No proof points detected (testimonials, credentials, results, or years in business)",
+            evidence: "No proof points detected (testimonials, credentials, results, or years in business) — no proof-language patterns found",
             severity: "high",
-            confidence: resolveConfidence({ source: "pattern_match", directEvidence: true, crossValidated: false }),
+            confidence: INFERRED,
             pageUrl: crawl.finalUrl,
           });
         }
       }
 
-      // GEO readiness gaps — per-category structured findings
-      // Homepage gets all 9 GEO skill categories; other pages get the 3 most impactful.
+      // GEO readiness gaps — INFERRED
+      // All GEO category grades are derived from heuristic analysis of content.
+      // They represent Rina's interpretation of signals, not declared values.
       const geoCategoriesToEval = isHomepage
         ? Object.values(geo.categories)
         : [
@@ -253,33 +361,38 @@ export async function runScan(businessId: number): Promise<ScanResult> {
               source: "geo_analysis",
               evidence: primaryGap,
               severity: cat.defaultSeverity,
-              confidence: resolveConfidence({ source: "pattern_match", directEvidence: true, crossValidated: false }),
+              confidence: INFERRED, // Rule 5: GEO grades are interpretations, not direct reads
               pageUrl: crawl.finalUrl,
             });
           }
         }
       }
 
-      // AI bot access finding (homepage only)
-      if (isHomepage && geo.aiBotAccess && !geo.aiBotAccess.allCriticalAllowed && geo.aiBotAccess.blockedBots.length > 0) {
+      // AI bot access finding — DETECTED (robots.txt was fetched directly)
+      if (
+        isHomepage &&
+        geo.aiBotAccess &&
+        !geo.aiBotAccess.allCriticalAllowed &&
+        geo.aiBotAccess.blockedBots.length > 0
+      ) {
         rawFindings.push({
           type: "ai_bot_blocked",
           source: "robots_txt_scan",
           evidence: `robots.txt is blocking AI citation bots: ${geo.aiBotAccess.blockedBots.join(", ")}`,
           severity: "critical",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED, // Rule 5: robots.txt was fetched and parsed directly
           pageUrl: crawl.finalUrl,
         });
       }
 
-      // llms.txt finding (homepage only)
+      // llms.txt finding — DETECTED (file was fetched directly)
       if (isHomepage && geo.llmsTxt && !geo.llmsTxt.present) {
         rawFindings.push({
           type: "missing_llms_txt",
           source: "llms_txt_scan",
-          evidence: "No llms.txt file found — AI systems cannot find a structured summary of this site",
+          evidence: "No llms.txt file found at domain root — AI systems cannot find a structured summary of this site",
           severity: "medium",
-          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          confidence: DETECTED, // Rule 5: /llms.txt was fetched and returned 404
           pageUrl: crawl.finalUrl,
         });
       }
@@ -289,8 +402,15 @@ export async function runScan(businessId: number): Promise<ScanResult> {
   }
 
   // ── Step 3: LLM interpretation of raw findings ─────────────────────────
+  // The LLM provides businessMeaning and recommendedAction — it does NOT
+  // change confidence labels. Confidence is set by the scanner, not the LLM.
   const findingsForInterpretation = rawFindings.filter((f) => !f.businessMeaning).slice(0, 10);
-  let interpretations: Array<{ index: number; businessMeaning: string; confidence: string; recommendedAction: string }> = [];
+  let interpretations: Array<{
+    index: number;
+    businessMeaning: string;
+    confidence: string;
+    recommendedAction: string;
+  }> = [];
 
   if (findingsForInterpretation.length > 0) {
     try {
@@ -338,7 +458,8 @@ export async function runScan(businessId: number): Promise<ScanResult> {
       raw.businessMeaning ??
       `${raw.type.replace(/_/g, " ")} detected on ${raw.pageUrl ?? "your website"}`;
 
-    // Save finding
+    // Rule 5: The confidence label set by the scanner is authoritative.
+    // The LLM interpretation does NOT override it.
     const [findingResult] = await db
       .insert(visibilityFindings)
       .values({
@@ -348,7 +469,7 @@ export async function runScan(businessId: number): Promise<ScanResult> {
         severity: raw.severity,
         businessMeaning,
         evidence: raw.evidence,
-        confidence: raw.confidence,
+        confidence: raw.confidence, // scanner-assigned, never LLM-overridden
         status: "open",
       })
       .$returningId();

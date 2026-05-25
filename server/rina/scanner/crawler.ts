@@ -1,7 +1,32 @@
-import https from "https";
+/**
+ * crawler.ts — Rina Scanner Network Layer
+ *
+ * Data integrity rules enforced here:
+ *
+ * Rule 1: Every page fetch is validated before analysis proceeds.
+ *   - HTTP status must be 2xx
+ *   - Content-Type must be text/html
+ *   - Visible text must be ≥ 500 characters (not an error page or empty shell)
+ *   - If the page appears to be JavaScript-rendered (thin HTML, no <h1>, no <p>),
+ *     crawlResult.jsRendered = true is set so downstream code can mark findings
+ *     as confidence:inferred rather than confidence:detected.
+ *
+ * Rule 1 (prerender): This crawler uses a plain HTTP fetch. It does NOT execute
+ *   JavaScript. For JS-heavy sites (React, Next.js, Wix, Squarespace), the
+ *   fetched HTML will be a thin shell. When jsRendered = true, the scan workflow
+ *   must NOT claim detected confidence on content-analysis findings — those
+ *   findings must be labeled inferred with evidence noting the limitation.
+ *
+ * Rule 3: Schema and metadata parsing are delegated to schemaParser.ts and
+ *   metadataParser.ts which use node-html-parser (not regex).
+ */
+
 import http from "http";
-import { URL } from "url";
-import type { AiBotAccessResult, LlmsTxtResult } from "./geoReadiness";
+import https from "https";
+
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
 
 export interface CrawlResult {
   url: string;
@@ -11,6 +36,14 @@ export interface CrawlResult {
   robotsBlocked: boolean;
   html: string;
   contentType: string;
+  /** True if the page appears to be a JavaScript-rendered SPA shell.
+   *  When true, content-analysis findings must use confidence:inferred. */
+  jsRendered: boolean;
+  /** True if the page passed all content validation checks (status 2xx,
+   *  content-type html, visible text ≥ 500 chars, not an error page). */
+  contentValidated: boolean;
+  /** Human-readable reason if contentValidated = false */
+  contentValidationReason?: string;
   error?: string;
 }
 
@@ -19,79 +52,201 @@ export interface RobotsResult {
   userAgent: string;
 }
 
-// Critical AI citation bots that must be allowed for full GEO visibility
+export interface AiBotAccessResult {
+  /** True if all critical citation bots are allowed (or robots.txt is absent) */
+  allCriticalAllowed: boolean;
+  blockedBots: string[];
+  allowedBots: string[];
+  hasRobotsTxt: boolean;
+}
+
+export interface LlmsTxtResult {
+  present: boolean;
+  hasH1: boolean;
+  hasBlockquote: boolean;
+  hasH2Sections: boolean;
+  lineCount: number;
+}
+
+// ─────────────────────────────────────────────
+// Content validation
+// ─────────────────────────────────────────────
+
+/** Minimum visible-text character count to consider a page real content */
+const MIN_VISIBLE_TEXT_CHARS = 500;
+
+/** Patterns that indicate an error page rather than real content */
+const ERROR_PAGE_PATTERNS = [
+  /404\s*(not found|page not found|error)/i,
+  /403\s*(forbidden|access denied)/i,
+  /500\s*(internal server error)/i,
+  /503\s*(service unavailable)/i,
+  /<title>[^<]*(404|403|500|503|not found|error|forbidden)[^<]*<\/title>/i,
+];
+
+/** Strip HTML tags and return visible text */
+function extractVisibleText(html: string): string {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Validate that fetched HTML represents real page content.
+ * Returns { valid, reason, jsRendered }.
+ */
+function validateContent(html: string, statusCode: number, contentType: string): {
+  valid: boolean;
+  reason?: string;
+  jsRendered: boolean;
+} {
+  // Must be a successful response
+  if (statusCode < 200 || statusCode >= 400) {
+    return { valid: false, reason: `HTTP ${statusCode}`, jsRendered: false };
+  }
+
+  // Must be HTML
+  if (contentType && !contentType.includes("text/html")) {
+    return { valid: false, reason: `Non-HTML content type: ${contentType}`, jsRendered: false };
+  }
+
+  // Must have some HTML
+  if (!html || html.length < 100) {
+    return { valid: false, reason: "Empty or near-empty response body", jsRendered: false };
+  }
+
+  // Check for error page patterns
+  for (const pattern of ERROR_PAGE_PATTERNS) {
+    if (pattern.test(html.slice(0, 2000))) {
+      return { valid: false, reason: "Page appears to be an error page", jsRendered: false };
+    }
+  }
+
+  // Extract visible text
+  const visibleText = extractVisibleText(html);
+
+  // Detect JavaScript-rendered SPA shell:
+  // - Very little visible text despite having HTML
+  // - No <h1> tag
+  // - No <p> tags with content
+  // - Has <div id="root"> or <div id="app"> (React/Vue/Angular mount points)
+  const hasSpaMount = /<div[^>]+id=["'](root|app|__next|__nuxt)["']/i.test(html);
+  const hasH1 = /<h1[^>]*>[^<]{3,}/i.test(html);
+  const hasParagraphs = (html.match(/<p[^>]*>[^<]{20,}/gi) ?? []).length >= 2;
+  const isJsRendered = hasSpaMount && (!hasH1 || !hasParagraphs || visibleText.length < MIN_VISIBLE_TEXT_CHARS);
+
+  // Minimum content check
+  if (visibleText.length < MIN_VISIBLE_TEXT_CHARS) {
+    if (isJsRendered) {
+      // JS-rendered pages are technically crawlable but content is not readable
+      return {
+        valid: false,
+        reason: `JavaScript-rendered page — visible text is only ${visibleText.length} characters. Rina cannot analyze content that requires JavaScript execution.`,
+        jsRendered: true,
+      };
+    }
+    return {
+      valid: false,
+      reason: `Page has only ${visibleText.length} visible characters — insufficient content for analysis`,
+      jsRendered: false,
+    };
+  }
+
+  return { valid: true, jsRendered: isJsRendered };
+}
+
+// ─────────────────────────────────────────────
+// AI bot access check
+// ─────────────────────────────────────────────
+
+/** Critical AI citation bots that must be allowed for AI visibility */
 const CRITICAL_AI_BOTS = [
-  "GPTBot",           // OpenAI / ChatGPT
-  "OAI-SearchBot",    // OpenAI search
-  "ClaudeBot",        // Anthropic / Claude
-  "anthropic-ai",     // Anthropic crawler
-  "PerplexityBot",    // Perplexity AI
-  "Google-Extended",  // Google AI / Gemini training
-  "Bingbot",          // Microsoft / Copilot
+  "GPTBot",
+  "OAI-SearchBot",
+  "ClaudeBot",
+  "anthropic-ai",
+  "PerplexityBot",
+  "Google-Extended",
+  "Bingbot",
 ];
 
 /**
- * Check which AI citation bots are allowed/blocked in robots.txt.
- * Returns an AiBotAccessResult with blocked/allowed lists.
+ * Fetch robots.txt and check whether critical AI citation bots are allowed.
+ * Rule 1: This fetches the actual robots.txt — result is confidence:detected.
  */
 export async function checkAiBotAccess(baseUrl: string): Promise<AiBotAccessResult> {
   try {
     const url = new URL(baseUrl);
     const robotsUrl = `${url.protocol}//${url.host}/robots.txt`;
-    const robotsTxt = await fetchText(robotsUrl).catch(() => "");
+    const { content, statusCode } = await fetchTextWithStatus(robotsUrl).catch(() => ({
+      content: "",
+      statusCode: 0,
+    }));
 
-    if (!robotsTxt) {
+    if (statusCode !== 200 || !content) {
+      // No robots.txt — all bots allowed by default
       return {
         allCriticalAllowed: true,
         blockedBots: [],
-        allowedBots: CRITICAL_AI_BOTS,
+        allowedBots: [...CRITICAL_AI_BOTS],
         hasRobotsTxt: false,
       };
     }
 
-    const lines = robotsTxt.split("\n").map((l) => l.trim());
-    // Build a map of bot -> disallowed paths
-    const botDisallows: Record<string, string[]> = {};
+    // Parse robots.txt into per-agent rules
+    const lines = content.split("\n").map((l) => l.trim());
+    // Map: agentName (lowercase) → disallowedPaths[]
+    const agentRules: Map<string, string[]> = new Map();
     let currentAgents: string[] = [];
 
     for (const line of lines) {
-      const lower = line.toLowerCase();
-      if (lower.startsWith("user-agent:")) {
-        const agent = line.split(":").slice(1).join(":").trim();
-        currentAgents = [agent];
-      } else if (lower.startsWith("disallow:")) {
-        const path = line.split(":").slice(1).join(":").trim();
-        for (const agent of currentAgents) {
-          if (!botDisallows[agent]) botDisallows[agent] = [];
-          botDisallows[agent].push(path);
+      if (!line || line.startsWith("#")) continue;
+      const colonIdx = line.indexOf(":");
+      if (colonIdx === -1) continue;
+      const directive = line.slice(0, colonIdx).trim().toLowerCase();
+      const value = line.slice(colonIdx + 1).trim();
+
+      if (directive === "user-agent") {
+        currentAgents = [value.toLowerCase()];
+        if (!agentRules.has(value.toLowerCase())) {
+          agentRules.set(value.toLowerCase(), []);
         }
-      } else if (line === "") {
-        currentAgents = [];
+      } else if (directive === "disallow" && currentAgents.length > 0) {
+        for (const agent of currentAgents) {
+          const existing = agentRules.get(agent) ?? [];
+          existing.push(value);
+          agentRules.set(agent, existing);
+        }
       }
     }
 
-    const blockedBots: string[] = [];
-    const allowedBots: string[] = [];
+    /**
+     * Check if a specific bot is blocked.
+     * A bot is blocked if:
+     * - It has a specific Disallow: / rule, OR
+     * - The wildcard (*) has a Disallow: / rule AND the bot has no explicit Allow: /
+     */
+    const isBotBlocked = (botName: string): boolean => {
+      const botKey = botName.toLowerCase();
+      const botRules = agentRules.get(botKey);
+      const wildcardRules = agentRules.get("*") ?? [];
 
-    for (const bot of CRITICAL_AI_BOTS) {
-      // Check exact match (case-insensitive) and wildcard (*)
-      const botKey = Object.keys(botDisallows).find(
-        (k) => k.toLowerCase() === bot.toLowerCase()
-      );
-      const wildcardDisallows = botDisallows["*"] ?? [];
-
-      const botDisallowedPaths = botKey ? botDisallows[botKey] : [];
-      const allDisallows = [...wildcardDisallows, ...botDisallowedPaths];
-
-      // Bot is blocked if "/" is in disallow list or if it has an explicit full-site block
-      const isBlocked = allDisallows.some((p) => p === "/");
-
-      if (isBlocked) {
-        blockedBots.push(bot);
-      } else {
-        allowedBots.push(bot);
+      // Check bot-specific rules first
+      if (botRules !== undefined) {
+        return botRules.some((path) => path === "/" || path === "");
       }
+
+      // Fall back to wildcard rules
+      return wildcardRules.some((path) => path === "/" || path === "");
     }
+
+    const blockedBots = CRITICAL_AI_BOTS.filter((bot) => isBotBlocked(bot));
+    const allowedBots = CRITICAL_AI_BOTS.filter((bot) => !isBotBlocked(bot));
 
     return {
       allCriticalAllowed: blockedBots.length === 0,
@@ -100,35 +255,48 @@ export async function checkAiBotAccess(baseUrl: string): Promise<AiBotAccessResu
       hasRobotsTxt: true,
     };
   } catch {
+    // Network error — assume allowed (cannot confirm blocked)
     return {
       allCriticalAllowed: true,
       blockedBots: [],
-      allowedBots: CRITICAL_AI_BOTS,
+      allowedBots: [...CRITICAL_AI_BOTS],
       hasRobotsTxt: false,
     };
   }
 }
 
+// ─────────────────────────────────────────────
+// llms.txt check
+// ─────────────────────────────────────────────
+
 /**
  * Check for llms.txt at the root of the domain.
- * Returns presence, H1, blockquote, H2 sections, and line count.
- * A 404 response is treated as absent even if the body has content.
+ * Rule 1: Fetches the actual file — result is confidence:detected.
+ * A 404 or HTML error page response is treated as absent.
  */
 export async function checkLlmsTxt(baseUrl: string): Promise<LlmsTxtResult> {
-  const absent: LlmsTxtResult = { present: false, hasH1: false, hasBlockquote: false, hasH2Sections: false, lineCount: 0 };
+  const absent: LlmsTxtResult = {
+    present: false,
+    hasH1: false,
+    hasBlockquote: false,
+    hasH2Sections: false,
+    lineCount: 0,
+  };
   try {
     const url = new URL(baseUrl);
     const llmsUrl = `${url.protocol}//${url.host}/llms.txt`;
 
-    // Fetch with status code so we can reject 404s
-    const { content, statusCode } = await fetchTextWithStatus(llmsUrl).catch(() => ({ content: "", statusCode: 0 }));
+    const { content, statusCode } = await fetchTextWithStatus(llmsUrl).catch(() => ({
+      content: "",
+      statusCode: 0,
+    }));
 
-    // Only treat as present if the server actually returned 200 OK with content
+    // Only treat as present if server returned 200 OK with real content
     if (statusCode !== 200 || !content || content.length < 10) {
       return absent;
     }
 
-    // Validate it looks like a markdown llms.txt (not an HTML error page)
+    // Reject HTML error pages served at /llms.txt
     const isHtml = /<(!DOCTYPE|html|head|body)/i.test(content.slice(0, 200));
     if (isHtml) return absent;
 
@@ -145,7 +313,130 @@ export async function checkLlmsTxt(baseUrl: string): Promise<LlmsTxtResult> {
   }
 }
 
-/** Internal helper: fetch text and return the HTTP status code alongside the body */
+// ─────────────────────────────────────────────
+// robots.txt crawlability check
+// ─────────────────────────────────────────────
+
+export async function checkRobots(baseUrl: string, path = "/"): Promise<RobotsResult> {
+  try {
+    const url = new URL(baseUrl);
+    const robotsUrl = `${url.protocol}//${url.host}/robots.txt`;
+    const robotsTxt = await fetchText(robotsUrl);
+    const lines = robotsTxt.split("\n").map((l) => l.trim());
+    let inRelevantBlock = false;
+    let blocked = false;
+    for (const line of lines) {
+      if (line.toLowerCase().startsWith("user-agent:")) {
+        const agent = line.split(":")[1].trim().toLowerCase();
+        inRelevantBlock = agent === "*" || agent === "googlebot" || agent === "gptbot";
+      }
+      if (inRelevantBlock && line.toLowerCase().startsWith("disallow:")) {
+        const disallowedPath = line.split(":")[1].trim();
+        if (disallowedPath === "/" || (disallowedPath && path.startsWith(disallowedPath))) {
+          blocked = true;
+        }
+      }
+    }
+    return { allowed: !blocked, userAgent: "*" };
+  } catch {
+    return { allowed: true, userAgent: "*" };
+  }
+}
+
+// ─────────────────────────────────────────────
+// Main page fetch
+// ─────────────────────────────────────────────
+
+/**
+ * Fetch a URL and return the HTML content with full content validation.
+ * Rule 1: Validates status, content-type, visible text length, and JS-render detection.
+ * If contentValidated = false, the scan workflow must skip analysis or label
+ * all findings as confidence:unknown.
+ */
+export async function fetchPage(url: string): Promise<CrawlResult> {
+  try {
+    const parsedUrl = new URL(url);
+    const robotsCheck = await checkRobots(url, parsedUrl.pathname);
+    const { html, statusCode, finalUrl, contentType } = await fetchHtml(url);
+
+    const { valid, reason, jsRendered } = validateContent(html, statusCode, contentType);
+
+    return {
+      url,
+      finalUrl,
+      statusCode,
+      crawlable: statusCode >= 200 && statusCode < 400,
+      robotsBlocked: !robotsCheck.allowed,
+      html,
+      contentType,
+      jsRendered,
+      contentValidated: valid,
+      contentValidationReason: reason,
+    };
+  } catch (err: unknown) {
+    return {
+      url,
+      finalUrl: url,
+      statusCode: 0,
+      crawlable: false,
+      robotsBlocked: false,
+      html: "",
+      contentType: "",
+      jsRendered: false,
+      contentValidated: false,
+      contentValidationReason: err instanceof Error ? err.message : String(err),
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+// ─────────────────────────────────────────────
+// Link extraction
+// ─────────────────────────────────────────────
+
+export function extractSameDomainLinks(html: string, baseUrl: string): string[] {
+  const base = new URL(baseUrl);
+  const linkRegex = /href=["']([^"']+)["']/gi;
+  const links = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = linkRegex.exec(html)) !== null) {
+    try {
+      const href = match[1];
+      if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) continue;
+      const resolved = new URL(href, baseUrl);
+      if (resolved.hostname === base.hostname) {
+        resolved.hash = "";
+        const normalized = resolved.toString().replace(/\/$/, "");
+        links.add(normalized);
+      }
+    } catch {
+      // ignore malformed URLs
+    }
+  }
+  return Array.from(links).slice(0, 20);
+}
+
+// ─────────────────────────────────────────────
+// Internal HTTP helpers
+// ─────────────────────────────────────────────
+
+function fetchText(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith("https") ? https : http;
+    const req = lib.get(url, { timeout: 8000 }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve(data));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error(`Timeout fetching ${url}`));
+    });
+  });
+}
+
+/** Fetch text and return the HTTP status code alongside the body */
 function fetchTextWithStatus(url: string): Promise<{ content: string; statusCode: number }> {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith("https") ? https : http;
@@ -163,120 +454,10 @@ function fetchTextWithStatus(url: string): Promise<{ content: string; statusCode
   });
 }
 
-// Fetch robots.txt and check if the given path is allowed
-export async function checkRobots(baseUrl: string, path = "/"): Promise<RobotsResult> {
-  try {
-    const url = new URL(baseUrl);
-    const robotsUrl = `${url.protocol}//${url.host}/robots.txt`;
-    const robotsTxt = await fetchText(robotsUrl);
-
-    // Simple robots.txt parser — check for Disallow rules for * or Googlebot
-    const lines = robotsTxt.split("\n").map((l) => l.trim());
-    let inRelevantBlock = false;
-    let blocked = false;
-
-    for (const line of lines) {
-      if (line.toLowerCase().startsWith("user-agent:")) {
-        const agent = line.split(":")[1].trim().toLowerCase();
-        inRelevantBlock = agent === "*" || agent === "googlebot" || agent === "gptbot";
-      }
-      if (inRelevantBlock && line.toLowerCase().startsWith("disallow:")) {
-        const disallowedPath = line.split(":")[1].trim();
-        if (disallowedPath === "/" || (disallowedPath && path.startsWith(disallowedPath))) {
-          blocked = true;
-        }
-      }
-    }
-
-    return { allowed: !blocked, userAgent: "*" };
-  } catch {
-    // If robots.txt is missing or unreadable, assume allowed
-    return { allowed: true, userAgent: "*" };
-  }
-}
-
-// Fetch a URL and return the HTML content
-export async function fetchPage(url: string): Promise<CrawlResult> {
-  try {
-    const parsedUrl = new URL(url);
-    const robotsCheck = await checkRobots(url, parsedUrl.pathname);
-
-    const { html, statusCode, finalUrl, contentType } = await fetchHtml(url);
-
-    return {
-      url,
-      finalUrl,
-      statusCode,
-      crawlable: statusCode >= 200 && statusCode < 400,
-      robotsBlocked: !robotsCheck.allowed,
-      html,
-      contentType,
-    };
-  } catch (err: unknown) {
-    return {
-      url,
-      finalUrl: url,
-      statusCode: 0,
-      crawlable: false,
-      robotsBlocked: false,
-      html: "",
-      contentType: "",
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-}
-
-// Discover links on a page (same-domain only)
-export function extractSameDomainLinks(html: string, baseUrl: string): string[] {
-  const base = new URL(baseUrl);
-  const linkRegex = /href=["']([^"']+)["']/gi;
-  const links = new Set<string>();
-  let match: RegExpExecArray | null;
-
-  while ((match = linkRegex.exec(html)) !== null) {
-    try {
-      const href = match[1];
-      if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) continue;
-      const resolved = new URL(href, baseUrl);
-      if (resolved.hostname === base.hostname) {
-        // Normalize: strip hash and trailing slash
-        resolved.hash = "";
-        const normalized = resolved.toString().replace(/\/$/, "");
-        links.add(normalized);
-      }
-    } catch {
-      // ignore malformed URLs
-    }
-  }
-
-  return Array.from(links).slice(0, 20); // cap at 20 links per page
-}
-
-// ─────────────────────────────────────────────
-// Internal HTTP helpers
-// ─────────────────────────────────────────────
-function fetchText(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const lib = url.startsWith("https") ? https : http;
-    const req = lib.get(url, { timeout: 8000 }, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => resolve(data));
-    });
-    req.on("error", reject);
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error(`Timeout fetching ${url}`));
-    });
-  });
-}
-
-function fetchHtml(url: string, redirectCount = 0): Promise<{
-  html: string;
-  statusCode: number;
-  finalUrl: string;
-  contentType: string;
-}> {
+function fetchHtml(
+  url: string,
+  redirectCount = 0,
+): Promise<{ html: string; statusCode: number; finalUrl: string; contentType: string }> {
   return new Promise((resolve, reject) => {
     if (redirectCount > 5) {
       reject(new Error("Too many redirects"));
@@ -298,8 +479,10 @@ function fetchHtml(url: string, redirectCount = 0): Promise<{
       const statusCode = res.statusCode ?? 0;
       const contentType = res.headers["content-type"] ?? "";
 
-      // Handle redirects
-      if ((statusCode === 301 || statusCode === 302 || statusCode === 307 || statusCode === 308) && res.headers.location) {
+      if (
+        (statusCode === 301 || statusCode === 302 || statusCode === 307 || statusCode === 308) &&
+        res.headers.location
+      ) {
         const redirectUrl = new URL(res.headers.location, url).toString();
         res.resume();
         fetchHtml(redirectUrl, redirectCount + 1).then(resolve).catch(reject);
@@ -310,8 +493,7 @@ function fetchHtml(url: string, redirectCount = 0): Promise<{
       res.setEncoding("utf8");
       res.on("data", (chunk) => {
         html += chunk;
-        // Cap at 500KB to avoid memory issues
-        if (html.length > 512000) res.destroy();
+        if (html.length > 512000) res.destroy(); // cap at 500KB
       });
       res.on("end", () => resolve({ html, statusCode, finalUrl: url, contentType }));
     });
