@@ -15,8 +15,8 @@ const PILLARS = [
   },
   {
     icon: Gauge,
-    title: "She scores what matters",
-    body: "Every business gets an AI Visibility Scorecard across eight pillars adapted from peer-reviewed research, not vanity metrics.",
+    title: "She reads your visibility honestly",
+    body: "Rina grades five dimensions of AI visibility — showing up, being understood, trust, recommendation-readiness, and GEO readiness — with a confidence label on every finding.",
   },
   {
     icon: ClipboardList,
@@ -26,7 +26,7 @@ const PILLARS = [
   {
     icon: CalendarCheck,
     title: "She meets with you each week",
-    body: "A real briefing answers five questions: are we showing up, are we understood, are we recommendable, what changed, and what's next.",
+    body: "Every week Rina answers five questions in plain language: Are we showing up? Are we being understood? Are we trusted? Are we recommendation-ready? What should we fix next?",
   },
 ];
 
@@ -54,7 +54,7 @@ export default function Home() {
             </Link>
             <Button asChild>
               <a href={ctaHref}>
-                {isAuthenticated ? "Open Command Center" : "Sign in"}
+                {isAuthenticated ? "Open your weekly meeting" : "Sign in"}
                 <ArrowRight className="ml-1.5 h-4 w-4" />
               </a>
             </Button>
@@ -103,7 +103,7 @@ export default function Home() {
               <span className="h-1 w-1 rounded-full bg-slate-300" />
               <span>Owner stays in charge</span>
               <span className="h-1 w-1 rounded-full bg-slate-300" />
-              <span>5-status fix workflow</span>
+              <span>12-step fix workflow</span>
             </div>
           </div>
         </div>
@@ -148,7 +148,7 @@ export default function Home() {
               stands in the eyes of AI.
             </p>
             <ol className="space-y-3 text-sm">
-              {["Are we showing up?", "Are we understood?", "Are we recommendable?", "What changed?", "What's next?"].map(
+              {["Are we showing up?", "Are we being understood?", "Are we trusted?", "Are we recommendation-ready?", "What should we fix next?"].map(
                 (q, i) => (
                   <li key={q} className="flex items-start gap-3">
                     <span className="mt-0.5 h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
@@ -161,7 +161,7 @@ export default function Home() {
             </ol>
             <Button size="lg" className="mt-8" asChild>
               <a href={ctaHref}>
-                {isAuthenticated ? "Open Command Center" : "Get started"}
+                {isAuthenticated ? "Open your weekly meeting" : "Get started"}
                 <ArrowRight className="ml-1.5 h-4 w-4" />
               </a>
             </Button>

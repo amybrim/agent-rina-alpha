@@ -348,6 +348,76 @@ export default function WeeklyMeeting() {
         </div>
       </section>
 
+      {/* ── Lead Signals ─────────────────────────────────────────────── */}
+      <section>
+        <div className="text-xs uppercase tracking-widest text-slate-400 font-medium mb-3">
+          At a glance
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Open findings", value: snap?.openFindings ?? "—", hint: "Issues Rina has identified on your site" },
+            { label: "Critical findings", value: snap?.criticalFindings ?? "—", hint: "High-priority gaps that affect AI visibility" },
+            { label: "Active fixes", value: snap?.activeFixCount ?? "—", hint: "Fixes currently in progress or awaiting approval" },
+            { label: "Completed fixes", value: snap?.completedFixCount ?? "—", hint: "Fixes verified live on your site" },
+          ].map((sig) => (
+            <div
+              key={sig.label}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3.5"
+            >
+              <div className="text-2xl font-display font-bold text-slate-800 leading-none mb-1">
+                {sig.value}
+              </div>
+              <div className="text-xs font-medium text-slate-600">{sig.label}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{sig.hint}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Rina Can Help ────────────────────────────────────────────────── */}
+      <section className="rounded-2xl border border-violet-100 bg-violet-50 px-6 py-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-7 w-7 rounded-lg bg-violet-600 flex items-center justify-center text-white font-display text-xs shrink-0">
+            R
+          </div>
+          <div className="text-xs font-semibold text-violet-700 uppercase tracking-wide">
+            Rina can help right now
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            {
+              label: "Run a new scan",
+              description: "Re-check your site for new gaps or improvements.",
+              action: () => current && runScan.mutate({ businessId: current.id }),
+              busy: isScanning,
+            },
+            {
+              label: "Generate briefing",
+              description: "Get Rina's written read on where you stand this week.",
+              action: () => current && generateBriefing.mutate({ businessId: current.id }),
+              busy: isGenerating,
+            },
+            {
+              label: "Review fix queue",
+              description: "See what's waiting for your approval before it ships.",
+              action: () => navigate("/app/fixes"),
+              busy: false,
+            },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={item.action}
+              disabled={item.busy || isBusy}
+              className="text-left rounded-xl border border-violet-200 bg-white px-4 py-3.5 hover:border-violet-400 hover:bg-violet-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="text-sm font-semibold text-slate-800 mb-1">{item.label}</div>
+              <div className="text-xs text-slate-500 leading-relaxed">{item.description}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* ── Refresh / scan controls ──────────────────────────────────── */}
       <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
         <Button

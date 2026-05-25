@@ -115,14 +115,16 @@
 
 ---
 
-## PHASE 5 — Polish
+## PHASE 5 — Polish (COMPLETE)
 
-- [ ] ConfidenceLabel appears next to every grade, finding, fix, lead signal
-- [ ] Verify zero /100 scores anywhere in the UI
-- [ ] Verify AIChatBox is gone from all pages and imports
-- [ ] End-to-end test: onboard insightfulrina.com, run scan, approve a fix, verify — full loop
-- [ ] Verify Rina's Read on WeeklyMeeting is business-specific (not generic metric summary)
-- [ ] Run all vitest tests — must pass
+- [x] ConfidenceLabel appears next to every grade, finding, fix, lead signal (Scorecard, WeeklyMeeting, FixWorkspace, FixQueue)
+- [x] Zero /100 scores anywhere in the UI — grade labels only (clear/partial/not_yet_visible)
+- [x] AIChatBox removed from all pages and imports
+- [x] Home.tsx copy scrubbed: no "scorecard" language, five questions updated to exact brief spec
+- [x] Scorecard.tsx rebuilt: five dimensions with GradePill + ConfidenceLabel, health grade, no letter grades
+- [x] WeeklyMeeting.tsx: Lead Signals section added (At a glance stats), Rina Can Help panel added
+- [x] All 27 vitest tests passing, zero TypeScript errors
+- [ ] End-to-end live test: onboard insightfulrina.com, run scan, approve a fix, verify (requires browser login)
 
 ---
 

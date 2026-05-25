@@ -4,6 +4,7 @@
  */
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConfidenceLabel, type ConfidenceLevel } from "@/components/ConfidenceLabel";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -250,7 +251,7 @@ export default function FixQueue() {
                 <div className="text-xs text-slate-500 leading-relaxed line-clamp-2">
                   {fix.recommendation}
                 </div>
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span
                     className={cn(
                       "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
@@ -263,6 +264,9 @@ export default function FixQueue() {
                   <span className="text-[10px] text-slate-400 capitalize">
                     {fix.difficulty} effort
                   </span>
+                  <ConfidenceLabel
+                    level={(fix.status === "verified" ? "confirmed" : fix.status === "published" ? "estimated" : "inferred") as ConfidenceLevel}
+                  />
                 </div>
               </div>
               <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-violet-500 transition-colors shrink-0 mt-1" />
