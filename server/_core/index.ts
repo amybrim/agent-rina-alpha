@@ -36,6 +36,21 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+
+  // Some OAuth portals redirect to the root URL with code+state params.
+  // Detect this and forward to the real callback handler.
+  app.get("/", (req, res, next) => {
+    const code = req.query["code"];
+    const state = req.query["state"];
+    if (typeof code === "string" && typeof state === "string") {
+      const qs = new URLSearchParams({ code, state });
+      // Preserve the ?next= param if it was embedded in the original redirect URI
+      const next = req.query["next"];
+      if (typeof next === "string") qs.set("next", next);
+      return res.redirect(302, `/api/oauth/callback?${qs.toString()}`);
+    }
+    next();
+  });
   // tRPC API
   app.use(
     "/api/trpc",
