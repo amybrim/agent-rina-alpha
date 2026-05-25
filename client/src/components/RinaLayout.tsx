@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
-import { RINA_HERO_IMAGE } from "@/lib/rina";
+import { RINA_AVATAR_IMAGE, RINA_HERO_IMAGE } from "@/lib/rina";
 import { trpc } from "@/lib/trpc";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import {
@@ -143,9 +143,11 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
         <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-slate-100">
           {/* Brand mark */}
           <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-100">
-            <div className="h-10 w-10 rounded-xl bg-violet-600 flex items-center justify-center text-white font-display text-xl shadow">
-              R
-            </div>
+            <img
+              src={RINA_AVATAR_IMAGE}
+              alt="Rina"
+              className="h-10 w-10 rounded-xl object-cover shadow"
+            />
             <div>
               <div className="font-display text-lg text-slate-800 leading-tight">
                 Agent Rina

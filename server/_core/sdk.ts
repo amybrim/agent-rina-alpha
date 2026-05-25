@@ -38,20 +38,35 @@ class OAuthService {
     }
   }
 
-  private decodeState(state: string): string {
-    const redirectUri = atob(state);
-    return redirectUri;
+  private decodeState(state: string): { redirectUri: string; next?: string } {
+    try {
+      const decoded = atob(state);
+      // New format: JSON with { redirectUri, next }
+      try {
+        const parsed = JSON.parse(decoded);
+        if (parsed && typeof parsed.redirectUri === "string") {
+          return { redirectUri: parsed.redirectUri, next: parsed.next };
+        }
+      } catch {
+        // Fall through to legacy format
+      }
+      // Legacy format: plain redirectUri string
+      return { redirectUri: decoded };
+    } catch {
+      return { redirectUri: "" };
+    }
   }
 
   async getTokenByCode(
     code: string,
     state: string
   ): Promise<ExchangeTokenResponse> {
+    const { redirectUri } = this.decodeState(state);
     const payload: ExchangeTokenRequest = {
       clientId: ENV.appId,
       grantType: "authorization_code",
       code,
-      redirectUri: this.decodeState(state),
+      redirectUri,
     };
 
     const { data } = await this.client.post<ExchangeTokenResponse>(

@@ -9,6 +9,32 @@ function getQueryParam(req: Request, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+/**
+ * Decode the state param to extract the post-login redirect destination.
+ * Supports two formats:
+ *   - New: base64(JSON.stringify({ redirectUri, next }))
+ *   - Legacy: base64(redirectUri string)
+ */
+function getNextFromState(state: string): string {
+  try {
+    const decoded = Buffer.from(state, "base64").toString("utf8");
+    try {
+      const parsed = JSON.parse(decoded);
+      if (parsed && typeof parsed.next === "string" && parsed.next.startsWith("http")) {
+        // Extract just the path+search from the next URL so we redirect to a
+        // relative path (avoids open-redirect issues with external URLs).
+        const url = new URL(parsed.next);
+        return url.pathname + url.search;
+      }
+    } catch {
+      // Fall through — legacy format
+    }
+  } catch {
+    // Ignore decode errors
+  }
+  return "/app";
+}
+
 export function registerOAuthRoutes(app: Express) {
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
@@ -44,7 +70,9 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      // Redirect to the post-login destination encoded in state, defaulting to /app
+      const next = getNextFromState(state);
+      res.redirect(302, next);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });
