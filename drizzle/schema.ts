@@ -14,29 +14,24 @@ import {
 // 1. users (extended from template)
 // ─────────────────────────────────────────────
 export const users = mysqlTable("users", {
-  id: varchar("id", { length: 128 }).primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  email: varchar("email", { length: 255 }),
-  avatarUrl: text("avatar_url"),
-  role: mysqlEnum("role", ["admin", "user"]).notNull().default("user"),
-  subscriptionTier: mysqlEnum("subscription_tier", ["starter", "growth", "pro", "agency"]).default("starter"),
-  subscriptionStatus: varchar("subscription_status", { length: 64 }),
-  stripeCustomerId: varchar("stripe_customer_id", { length: 128 }),
-  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 128 }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  id: int("id").primaryKey().autoincrement(),
+  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  name: text("name"),
+  email: varchar("email", { length: 320 }),
+  loginMethod: varchar("loginMethod", { length: 64 }),
+  role: mysqlEnum("role", ["user", "admin"]).notNull().default("user"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  lastSignedIn: timestamp("lastSignedIn").notNull().defaultNow(),
+  subscriptionTier: mysqlEnum("subscriptionTier", ["starter", "growth", "pro", "agency"]).notNull().default("starter"),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
+  subscriptionStatus: varchar("subscriptionStatus", { length: 32 }),
 });
-
 // ─────────────────────────────────────────────
-// User type alias (id field IS the openId)
+// User type alias
 // ─────────────────────────────────────────────
-// User type — id IS the openId, virtual openId field added for sdk.ts compatibility
-export type User = Omit<typeof users.$inferSelect, 'id'> & {
-  id: string;
-  openId: string;
-  loginMethod?: string | null;
-  lastSignedIn?: Date | null;
-};
+export type User = typeof users.$inferSelect;
 
 // ─────────────────────────────────────────────
 // 2. businesses

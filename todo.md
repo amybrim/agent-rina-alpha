@@ -133,3 +133,17 @@
 - [ ] Heartbeat weekly scan scheduling
 - [ ] External AI visibility probes (ChatGPT, Perplexity, Gemini)
 - [ ] Wix draft publishing integration (Phase 3 territory)
+
+---
+
+## POST-PHASE 5 — OAuth Fix (COMPLETE)
+
+- [x] Identify root cause: users table had camelCase columns (loginMethod, lastSignedIn) from migration 0000, but schema.ts was rebuilt with snake_case column names (login_method, last_signed_in) causing Drizzle to query wrong columns
+- [x] Fix schema.ts users table to match actual DB structure (int id + openId varchar + camelCase column names)
+- [x] Fix db.ts user helpers to use openId column for lookups instead of id
+- [x] Fix routers.ts to use ctx.user.openId instead of ctx.user.id (40 occurrences replaced)
+- [x] Fix sdk.ts buildCronUser to use correct User type shape (int id, openId field)
+- [x] Zero TypeScript errors after all fixes
+- [x] 27 vitest tests passing after all fixes
+- [ ] Live end-to-end test: sign in → onboard insightfulrina.com → run scan → verify findings appear in DB → approve a fix → verify state machine transitions
+- [ ] Push final state to GitHub

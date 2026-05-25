@@ -338,7 +338,7 @@ function buildCronUser(
 ): AuthenticatedUser {
   const now = new Date();
   return {
-    id: userInfo.openId,
+    id: 0, // synthetic id for cron users
     openId: userInfo.openId,
     name: userInfo.name || "Manus Scheduled Task",
     email: null,
@@ -347,6 +347,10 @@ function buildCronUser(
     createdAt: now,
     updatedAt: now,
     lastSignedIn: now,
+    subscriptionTier: "starter",
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    subscriptionStatus: null,
     taskUid: userInfo.taskUid ?? undefined,
     isCron: true,
   } as AuthenticatedUser;

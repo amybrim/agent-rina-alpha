@@ -34,34 +34,30 @@ export type { User } from "../drizzle/schema";
 
 // ─────────────────────────────────────────────
 // User helpers (required by sdk.ts)
-// The users table uses `id` as the primary key (varchar, set to openId value)
+// The users table uses `id` as auto-increment int; `openId` is the Manus openId
 // ─────────────────────────────────────────────
-type UserRow = typeof schema.users.$inferSelect;
-
 export type UpsertUserInput = {
-  openId: string; // maps to users.id
+  openId: string;
   name?: string | null;
   email?: string | null;
   loginMethod?: string | null;
-  lastSignedIn?: Date | null; // ignored — not in schema, kept for sdk.ts compatibility
+  lastSignedIn?: Date | null;
 };
 
-export async function getUserByOpenId(openId: string): Promise<(UserRow & { openId: string }) | null> {
+export async function getUserByOpenId(openId: string): Promise<schema.User | null> {
   const [user] = await db
     .select()
     .from(schema.users)
-    .where(eq(schema.users.id, openId))
+    .where(eq(schema.users.openId, openId))
     .limit(1);
-  if (!user) return null;
-  // Attach openId as virtual field (id IS the openId)
-  return { ...user, openId: user.id };
+  return user ?? null;
 }
 
 export async function upsertUser(input: UpsertUserInput): Promise<void> {
   const existing = await db
     .select()
     .from(schema.users)
-    .where(eq(schema.users.id, input.openId))
+    .where(eq(schema.users.openId, input.openId))
     .limit(1)
     .then((rows) => rows[0] ?? null);
 
@@ -69,16 +65,19 @@ export async function upsertUser(input: UpsertUserInput): Promise<void> {
     const updates: Partial<typeof schema.users.$inferInsert> = { updatedAt: new Date() };
     if (input.name !== undefined && input.name !== null) updates.name = input.name;
     if (input.email !== undefined) updates.email = input.email;
-    // lastSignedIn not in schema — ignored
+    if (input.loginMethod !== undefined) updates.loginMethod = input.loginMethod;
+    if (input.lastSignedIn !== undefined && input.lastSignedIn !== null) updates.lastSignedIn = input.lastSignedIn;
     await db
       .update(schema.users)
       .set(updates)
-      .where(eq(schema.users.id, input.openId));
+      .where(eq(schema.users.openId, input.openId));
   } else {
     await db.insert(schema.users).values({
-      id: input.openId,
+      openId: input.openId,
       name: input.name ?? "User",
       email: input.email ?? null,
+      loginMethod: input.loginMethod ?? null,
+      lastSignedIn: input.lastSignedIn ?? new Date(),
     });
   }
 }

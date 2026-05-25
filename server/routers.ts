@@ -114,18 +114,18 @@ export const appRouter = router({
   // ── Business profile ──────────────────────────────────────────────────
   business: router({
     get: protectedProcedure.query(async ({ ctx }) => {
-      return getBusinessForUser(ctx.user.id);
+      return getBusinessForUser(ctx.user.openId);
     }),
     // list returns the user's single business as an array for UI compatibility
     list: protectedProcedure.query(async ({ ctx }) => {
-      const biz = await getBusinessForUser(ctx.user.id);
+      const biz = await getBusinessForUser(ctx.user.openId);
       return biz ? [biz] : [];
     }),
 
     getFullProfile: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return getFullProfile(input.businessId);
       }),
@@ -143,9 +143,9 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const existing = await getBusinessForUser(ctx.user.id);
+        const existing = await getBusinessForUser(ctx.user.openId);
         if (existing) throw new TRPCError({ code: "CONFLICT", message: "Business already exists" });
-        return createBusiness({ ...input, userId: ctx.user.id });
+        return createBusiness({ ...input, userId: ctx.user.openId });
       }),
 
     update: protectedProcedure
@@ -182,7 +182,7 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const { businessId, ...data } = input;
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return updateBusiness(businessId, data);
       }),
@@ -190,7 +190,7 @@ export const appRouter = router({
     completeOnboarding: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         await markOnboardingComplete(input.businessId);
         return { success: true };
@@ -209,7 +209,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         const { businessId, existingId, ...data } = input;
         return upsertOfferProfile(businessId, data, existingId);
@@ -228,7 +228,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         const { businessId, existingId, ...data } = input;
         return upsertAudienceProfile(businessId, data, existingId);
@@ -245,7 +245,7 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return listFixItemsForBusiness(input.businessId, input.statusFilter);
       }),
@@ -255,7 +255,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
         return fix;
       }),
@@ -272,7 +272,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return createFixItem(input);
       }),
@@ -288,10 +288,10 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
         try {
-          return await transitionFixStatus(input.fixId, input.newStatus, ctx.user.id, input.notes);
+          return await transitionFixStatus(input.fixId, input.newStatus, ctx.user.openId, input.notes);
         } catch (err: unknown) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -305,7 +305,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
         return getDecisionHistory(input.fixId, "fix_item");
       }),
@@ -335,7 +335,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
         return draftAssetForFix(input.fixId, input.assetTypeOverride);
       }),
@@ -345,7 +345,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
         return getLatestAssetForFix(input.fixId);
       }),
@@ -355,7 +355,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
         return getAssetVersionHistory(input.fixId);
       }),
@@ -377,7 +377,7 @@ export const appRouter = router({
     latest: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return getLatestBriefing(input.businessId);
       }),
@@ -385,7 +385,7 @@ export const appRouter = router({
     history: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return getBriefingHistory(input.businessId);
       }),
@@ -393,7 +393,7 @@ export const appRouter = router({
     generate: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return generateWeeklyBriefing(input.businessId);
       }),
@@ -404,7 +404,7 @@ export const appRouter = router({
     get: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return getVisibilitySnapshot(input.businessId);
       }),
@@ -415,7 +415,7 @@ export const appRouter = router({
     summary: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return getLeadSignalSummary(input.businessId);
       }),
@@ -423,7 +423,7 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return listLeadSignals(input.businessId);
       }),
@@ -439,7 +439,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return recordLeadSignal(input);
       }),
@@ -450,7 +450,7 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return listIntegrations(input.businessId);
       }),
@@ -465,7 +465,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         const { businessId, platform, ...data } = input;
         return upsertIntegration(businessId, platform, {
@@ -482,7 +482,7 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return { canPublish: await canPublish(input.businessId, input.platform) };
       }),
@@ -493,7 +493,7 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return listPageRecords(input.businessId);
       }),
@@ -504,7 +504,7 @@ export const appRouter = router({
     run: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return runScan(input.businessId);
       }),
@@ -523,9 +523,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
-        return processApprovalDecision(input.fixId, ctx.user.id, input.decision, input.notes);
+        return processApprovalDecision(input.fixId, ctx.user.openId, input.decision, input.notes);
       }),
 
     canPublish: protectedProcedure
@@ -537,7 +537,7 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return canPublishFix(input.fixId, input.businessId, input.platform);
       }),
@@ -552,9 +552,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
-        return markPublished(input.fixId, ctx.user.id, input.publishedUrl);
+        return markPublished(input.fixId, ctx.user.openId, input.publishedUrl);
       }),
 
     verify: protectedProcedure
@@ -567,9 +567,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
-        return verifyFix(input.fixId, ctx.user.id, input.evidence);
+        return verifyFix(input.fixId, ctx.user.openId, input.evidence);
       }),
 
     markFailed: protectedProcedure
@@ -582,9 +582,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const fix = await getFixItem(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
-        return markFailed(input.fixId, ctx.user.id, input.reason);
+        return markFailed(input.fixId, ctx.user.openId, input.reason);
       }),
   }),
 
@@ -598,7 +598,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const biz = await getBusinessForUser(ctx.user.id);
+        const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return runWeeklyBriefingWorkflow(input.businessId, input.forceRegenerate);
       }),
