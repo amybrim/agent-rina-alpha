@@ -151,3 +151,16 @@
 - [x] Zero TypeScript errors, 27 tests passing after full migration fix
 - [ ] Live end-to-end test: sign in → onboard insightfulrina.com → run scan → verify findings appear in DB → approve a fix → verify state machine transitions
 - [ ] Push final state to GitHub
+
+---
+
+## Step 3 — GEO/AI Understanding Evaluator (Build Priority #3)
+
+- [x] Rewrite geoReadiness.ts: implement all 9 GEO skill categories (Answer Readiness, Entity Clarity, Offer Clarity, Audience Clarity, Location/Service Area, Proof & Trust, Structured Data, Source Corroboration, Prompt-Recommendation Fit) — each producing CLEAR/PARTIAL/NOT_YET_VISIBLE
+- [x] Extend geoReadiness.ts: implement 8 Princeton/Auriti scoring categories (Findability, Understandability, Entity Confidence, Trust & Authority, Structured Data Readiness, Content & Answer Coverage, Local/Market Relevance, Progress & Implementation) — internal only, no numbers to UI
+- [x] Extend crawler.ts: add AI bot access check (OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, GPTBot, anthropic-ai, Bingbot) from robots.txt
+- [x] Extend crawler.ts: add llms.txt detection (presence, H1, blockquote, H2 sections)
+- [x] Update scanWorkflow.ts: replace simple geo.gaps loop with per-category structured findings using new evaluator output
+- [x] Update scanWorkflow.ts: map each GEO category finding to correct findingType for downstream grading
+- [x] Run TypeScript check and all tests after changes (0 errors, 27 tests passing)
+- [x] Save checkpoint

@@ -1,6 +1,7 @@
 import https from "https";
 import http from "http";
 import { URL } from "url";
+import type { AiBotAccessResult, LlmsTxtResult } from "./geoReadiness";
 
 export interface CrawlResult {
   url: string;
@@ -16,6 +17,123 @@ export interface CrawlResult {
 export interface RobotsResult {
   allowed: boolean;
   userAgent: string;
+}
+
+// Critical AI citation bots that must be allowed for full GEO visibility
+const CRITICAL_AI_BOTS = [
+  "GPTBot",           // OpenAI / ChatGPT
+  "OAI-SearchBot",    // OpenAI search
+  "ClaudeBot",        // Anthropic / Claude
+  "anthropic-ai",     // Anthropic crawler
+  "PerplexityBot",    // Perplexity AI
+  "Google-Extended",  // Google AI / Gemini training
+  "Bingbot",          // Microsoft / Copilot
+];
+
+/**
+ * Check which AI citation bots are allowed/blocked in robots.txt.
+ * Returns an AiBotAccessResult with blocked/allowed lists.
+ */
+export async function checkAiBotAccess(baseUrl: string): Promise<AiBotAccessResult> {
+  try {
+    const url = new URL(baseUrl);
+    const robotsUrl = `${url.protocol}//${url.host}/robots.txt`;
+    const robotsTxt = await fetchText(robotsUrl).catch(() => "");
+
+    if (!robotsTxt) {
+      return {
+        allCriticalAllowed: true,
+        blockedBots: [],
+        allowedBots: CRITICAL_AI_BOTS,
+        hasRobotsTxt: false,
+      };
+    }
+
+    const lines = robotsTxt.split("\n").map((l) => l.trim());
+    // Build a map of bot -> disallowed paths
+    const botDisallows: Record<string, string[]> = {};
+    let currentAgents: string[] = [];
+
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      if (lower.startsWith("user-agent:")) {
+        const agent = line.split(":").slice(1).join(":").trim();
+        currentAgents = [agent];
+      } else if (lower.startsWith("disallow:")) {
+        const path = line.split(":").slice(1).join(":").trim();
+        for (const agent of currentAgents) {
+          if (!botDisallows[agent]) botDisallows[agent] = [];
+          botDisallows[agent].push(path);
+        }
+      } else if (line === "") {
+        currentAgents = [];
+      }
+    }
+
+    const blockedBots: string[] = [];
+    const allowedBots: string[] = [];
+
+    for (const bot of CRITICAL_AI_BOTS) {
+      // Check exact match (case-insensitive) and wildcard (*)
+      const botKey = Object.keys(botDisallows).find(
+        (k) => k.toLowerCase() === bot.toLowerCase()
+      );
+      const wildcardDisallows = botDisallows["*"] ?? [];
+
+      const botDisallowedPaths = botKey ? botDisallows[botKey] : [];
+      const allDisallows = [...wildcardDisallows, ...botDisallowedPaths];
+
+      // Bot is blocked if "/" is in disallow list or if it has an explicit full-site block
+      const isBlocked = allDisallows.some((p) => p === "/");
+
+      if (isBlocked) {
+        blockedBots.push(bot);
+      } else {
+        allowedBots.push(bot);
+      }
+    }
+
+    return {
+      allCriticalAllowed: blockedBots.length === 0,
+      blockedBots,
+      allowedBots,
+      hasRobotsTxt: true,
+    };
+  } catch {
+    return {
+      allCriticalAllowed: true,
+      blockedBots: [],
+      allowedBots: CRITICAL_AI_BOTS,
+      hasRobotsTxt: false,
+    };
+  }
+}
+
+/**
+ * Check for llms.txt at the root of the domain.
+ * Returns presence, H1, blockquote, H2 sections, and line count.
+ */
+export async function checkLlmsTxt(baseUrl: string): Promise<LlmsTxtResult> {
+  try {
+    const url = new URL(baseUrl);
+    const llmsUrl = `${url.protocol}//${url.host}/llms.txt`;
+    const content = await fetchText(llmsUrl).catch(() => "");
+
+    if (!content || content.length < 10) {
+      return { present: false, hasH1: false, hasBlockquote: false, hasH2Sections: false, lineCount: 0 };
+    }
+
+    const lines = content.split("\n");
+    return {
+      present: true,
+      hasH1: lines.some((l) => l.startsWith("# ")),
+      hasBlockquote: lines.some((l) => l.startsWith("> ")),
+      hasH2Sections: lines.some((l) => l.startsWith("## ")),
+      lineCount: lines.length,
+    };
+  } catch {
+    return { present: false, hasH1: false, hasBlockquote: false, hasH2Sections: false, lineCount: 0 };
+  }
 }
 
 // Fetch robots.txt and check if the given path is allowed

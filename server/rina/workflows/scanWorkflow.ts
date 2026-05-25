@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import { visibilityFindings, fixItems } from "../../../drizzle/schema";
 import type { InferSelectModel } from "drizzle-orm";
-import { fetchPage, extractSameDomainLinks } from "../scanner/crawler";
+import { fetchPage, extractSameDomainLinks, checkAiBotAccess, checkLlmsTxt } from "../scanner/crawler";
 import { parseMetadata } from "../scanner/metadataParser";
 import { parseSchema } from "../scanner/schemaParser";
 import { analyzeContent } from "../scanner/contentAnalyzer";
@@ -70,6 +70,12 @@ export async function runScan(businessId: number): Promise<ScanResult> {
     errors.push(`Homepage not crawlable: ${homepageResult.error ?? `HTTP ${homepageResult.statusCode}`}`);
   }
 
+  // ── Step 1b: AI bot access + llms.txt (homepage domain, run once) ───────
+  const [aiBotAccess, llmsTxt] = await Promise.all([
+    checkAiBotAccess(business.url),
+    checkLlmsTxt(business.url),
+  ]);
+
   // ── Step 2: Analyze each page ──────────────────────────────────────────
   for (const url of urlsToCrawl) {
     try {
@@ -83,10 +89,18 @@ export async function runScan(businessId: number): Promise<ScanResult> {
 
       pagesScanned++;
 
+      const isHomepage = url === business.url;
       const metadata = parseMetadata(crawl.html);
       const schema = parseSchema(crawl.html);
       const content = analyzeContent(crawl.html, url.includes("about") ? "about" : "homepage");
-      const geo = assessGeoReadiness(crawl.html, schema, metadata, content);
+      const geo = assessGeoReadiness(
+        crawl.html,
+        schema,
+        metadata,
+        content,
+        isHomepage ? aiBotAccess : undefined,
+        isHomepage ? llmsTxt : undefined,
+      );
 
       // Save page record
       await upsertPageRecord(businessId, crawl.finalUrl, {
@@ -106,7 +120,6 @@ export async function runScan(businessId: number): Promise<ScanResult> {
       });
 
       // ── Generate findings from this page ─────────────────────────────
-      const isHomepage = url === business.url;
 
       // Missing or thin title
       if (!metadata.title) {
@@ -221,18 +234,54 @@ export async function runScan(businessId: number): Promise<ScanResult> {
         }
       }
 
-      // GEO readiness gaps
-      if (geo.grade === "NOT_YET_VISIBLE" || geo.grade === "PARTIAL") {
-        for (const gap of geo.gaps.slice(0, 3)) {
-          rawFindings.push({
-            type: "geo_readiness_gap",
-            source: "geo_analysis",
-            evidence: gap,
-            severity: "medium",
-            confidence: resolveConfidence({ source: "pattern_match", directEvidence: true, crossValidated: false }),
-            pageUrl: crawl.finalUrl,
-          });
+      // GEO readiness gaps — per-category structured findings
+      // Homepage gets all 9 GEO skill categories; other pages get the 3 most impactful.
+      const geoCategoriesToEval = isHomepage
+        ? Object.values(geo.categories)
+        : [
+            geo.categories.entityClarity,
+            geo.categories.structuredDataReadiness,
+            geo.categories.answerReadiness,
+          ];
+
+      for (const cat of geoCategoriesToEval) {
+        if (cat.grade === "NOT_YET_VISIBLE" || cat.grade === "PARTIAL") {
+          const primaryGap = cat.gaps[0];
+          if (primaryGap) {
+            rawFindings.push({
+              type: cat.findingType,
+              source: "geo_analysis",
+              evidence: primaryGap,
+              severity: cat.defaultSeverity,
+              confidence: resolveConfidence({ source: "pattern_match", directEvidence: true, crossValidated: false }),
+              pageUrl: crawl.finalUrl,
+            });
+          }
         }
+      }
+
+      // AI bot access finding (homepage only)
+      if (isHomepage && geo.aiBotAccess && !geo.aiBotAccess.allCriticalAllowed && geo.aiBotAccess.blockedBots.length > 0) {
+        rawFindings.push({
+          type: "ai_bot_blocked",
+          source: "robots_txt_scan",
+          evidence: `robots.txt is blocking AI citation bots: ${geo.aiBotAccess.blockedBots.join(", ")}`,
+          severity: "critical",
+          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          pageUrl: crawl.finalUrl,
+        });
+      }
+
+      // llms.txt finding (homepage only)
+      if (isHomepage && geo.llmsTxt && !geo.llmsTxt.present) {
+        rawFindings.push({
+          type: "missing_llms_txt",
+          source: "llms_txt_scan",
+          evidence: "No llms.txt file found — AI systems cannot find a structured summary of this site",
+          severity: "medium",
+          confidence: resolveConfidence({ source: "live_scan", directEvidence: true, crossValidated: false }),
+          pageUrl: crawl.finalUrl,
+        });
       }
     } catch (err) {
       errors.push(`Error scanning ${url}: ${err instanceof Error ? err.message : String(err)}`);
