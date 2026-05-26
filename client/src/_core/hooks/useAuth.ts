@@ -60,14 +60,26 @@ export function useAuth(options?: UseAuthOptions) {
     logoutMutation.isPending,
   ]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!redirectOnUnauthenticated) return;
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
-    if (window.location.pathname === redirectPath) return;
-
-    window.location.href = redirectPath
+    // redirectPath is a full URL (OAuth portal); check origin to avoid infinite loop
+    try {
+      const redirectUrl = new URL(redirectPath);
+      if (redirectUrl.origin !== window.location.origin) {
+        // External OAuth redirect — safe to proceed
+        window.location.href = redirectPath;
+        return;
+      }
+      // Same-origin redirect: check pathname
+      if (window.location.pathname === redirectUrl.pathname) return;
+    } catch {
+      // Not a valid URL, treat as pathname
+      if (window.location.pathname === redirectPath) return;
+    }
+    window.location.href = redirectPath;
   }, [
     redirectOnUnauthenticated,
     redirectPath,
