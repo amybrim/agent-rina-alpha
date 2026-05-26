@@ -1,7 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db";
-import { fixItems, userDecisionRecords } from "../../../drizzle/schema";
+import { fixItems, userDecisionRecords, visibilityFindings } from "../../../drizzle/schema";
 import type { InferSelectModel } from "drizzle-orm";
+
+export type FixWithFinding = InferSelectModel<typeof fixItems> & {
+  sourceFinding: InferSelectModel<typeof visibilityFindings> | null;
+};
 
 export type FixStatus = InferSelectModel<typeof fixItems>["status"];
 
@@ -115,6 +119,22 @@ export async function createFixItem(data: {
 export async function getFixItem(fixId: number): Promise<InferSelectModel<typeof fixItems> | null> {
   const [fix] = await db.select().from(fixItems).where(eq(fixItems.id, fixId)).limit(1);
   return fix ?? null;
+}
+
+/** getFixWithFinding — returns the fix plus its linked visibility_finding (if any) */
+export async function getFixWithFinding(fixId: number): Promise<FixWithFinding | null> {
+  const [fix] = await db.select().from(fixItems).where(eq(fixItems.id, fixId)).limit(1);
+  if (!fix) return null;
+  let sourceFinding: InferSelectModel<typeof visibilityFindings> | null = null;
+  if (fix.findingId) {
+    const [f] = await db
+      .select()
+      .from(visibilityFindings)
+      .where(eq(visibilityFindings.id, fix.findingId))
+      .limit(1);
+    sourceFinding = f ?? null;
+  }
+  return { ...fix, sourceFinding };
 }
 
 export async function listFixItemsForBusiness(

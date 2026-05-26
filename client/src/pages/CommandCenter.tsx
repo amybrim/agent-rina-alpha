@@ -38,6 +38,17 @@ import { toast } from "sonner";
 
 type ToneKey = "improving" | "watch" | "needs_proof" | "draft_ready" | "neutral";
 
+const HEALTH_GRADE_LABEL: Record<string, string> = {
+  STRONG: "Strong",
+  IMPROVING: "Improving",
+  AT_RISK: "At Risk",
+  NEEDS_WORK: "Needs Work",
+};
+function humanHealthGrade(raw: string | null | undefined): string {
+  if (!raw) return "unknown";
+  return HEALTH_GRADE_LABEL[raw] ?? raw;
+}
+
 const TONE_STYLES: Record<ToneKey, string> = {
   improving: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
   watch: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
@@ -249,7 +260,7 @@ export default function CommandCenter() {
                 </h1>
                 <p className="text-muted-foreground mt-3 max-w-2xl">
                                     {snapshot.data
-                    ? `${snapshot.data.rinaRead ?? `Your visibility grade is ${snapshot.data.healthGrade}.`} ${
+                    ? `${snapshot.data.rinaRead ?? `Your visibility grade is ${humanHealthGrade(snapshot.data.healthGrade)}.`} ${
                         counts.recommended + counts.drafted > 0
                           ? `I've lined up ${counts.recommended + counts.drafted} fixes for you to review when you're ready.`
                           : "Nothing urgent in the queue — we're holding steady."

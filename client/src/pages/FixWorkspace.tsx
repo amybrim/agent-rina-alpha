@@ -151,6 +151,10 @@ export default function FixWorkspace() {
       utils.assets.getLatest.invalidate({ fixId });
       utils.fixes.get.invalidate({ fixId });
       toast.success("Draft ready.");
+      // Auto-transition from recommended → drafted when draft is generated
+      if (fix?.status === "recommended") {
+        transitionMutation.mutate({ fixId, newStatus: "drafted", notes: undefined });
+      }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -179,6 +183,23 @@ export default function FixWorkspace() {
   const fix = fixQuery.data;
   const asset = latestAsset.data;
   const history = decisionHistory.data ?? [];
+
+  // Map DB confidence values to ConfidenceLabel component levels
+  function mapConfidence(dbValue: string | null | undefined): "confirmed" | "inferred" | "estimated" | "unknown" {
+    if (dbValue === "detected") return "confirmed";
+    if (dbValue === "inferred") return "inferred";
+    if (dbValue === "likely") return "estimated";
+    return "unknown";
+  }
+
+  // Human-readable finding type labels
+  function humanFindingType(raw: string | null | undefined): string {
+    if (!raw) return "Finding";
+    return raw
+      .replace(/_gap$/, "")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
 
   if (fixQuery.isLoading) {
     return (
@@ -295,6 +316,28 @@ export default function FixWorkspace() {
               {fix.recommendation}
             </p>
           </div>
+
+          {/* Source finding — confidence and evidence */}
+          {fix.sourceFinding && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  {humanFindingType(fix.sourceFinding.findingType)}
+                </span>
+                <ConfidenceLabel level={mapConfidence(fix.sourceFinding.confidence)} size="xs" />
+              </div>
+              {fix.sourceFinding.businessMeaning && (
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {fix.sourceFinding.businessMeaning}
+                </p>
+              )}
+              {fix.sourceFinding.evidence && (
+                <p className="text-xs text-slate-400 italic leading-relaxed">
+                  Source: {fix.sourceFinding.evidence}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Meta */}
           <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 text-sm">

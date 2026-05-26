@@ -19,6 +19,7 @@ import {
   createFixItem,
   getDecisionHistory,
   getFixItem,
+  getFixWithFinding,
   listFixItemsForBusiness,
   transitionFixStatus,
 } from "./rina/brain/fixEngine";
@@ -253,7 +254,7 @@ export const appRouter = router({
     get: protectedProcedure
       .input(z.object({ fixId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const fix = await getFixItem(input.fixId);
+        const fix = await getFixWithFinding(input.fixId);
         if (!fix) throw new TRPCError({ code: "NOT_FOUND" });
         const biz = await getBusinessForUser(ctx.user.openId);
         if (!biz || biz.id !== fix.businessId) throw new TRPCError({ code: "FORBIDDEN" });
