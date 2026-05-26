@@ -8,15 +8,18 @@ import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import {
   Briefcase,
   CalendarDays,
+  Check,
+  ChevronDown,
   ClipboardList,
   FileBarChart,
   LayoutGrid,
   LogOut,
   Plug,
+  Plus,
   Settings,
   Sparkles,
 } from "lucide-react";
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 
 const NAV: Array<{ to: string; label: string; icon: typeof LayoutGrid }> = [
@@ -60,6 +63,67 @@ function HealthCard() {
       </div>
       {data?.rinaRead && (
         <div className="text-[10px] text-slate-400 mt-1 line-clamp-2">{data.rinaRead}</div>
+      )}
+    </div>
+  );
+}
+
+/** Business switcher dropdown — shown above the nav */
+function BusinessSwitcher() {
+  const { businesses, current, select } = useCurrentBusiness();
+  const [, navigate] = useLocation();
+  const [open, setOpen] = useState(false);
+
+  if (!current) return null;
+
+  return (
+    <div className="relative px-3 py-2 border-b border-slate-100">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+      >
+        <div className="h-6 w-6 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-[11px] font-bold shrink-0">
+          {current.name[0]?.toUpperCase() ?? "B"}
+        </div>
+        <span className="flex-1 text-left font-medium truncate text-sm">{current.name}</span>
+        <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-3 right-3 top-full mt-1 z-50 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+          {businesses.map((biz) => (
+            <button
+              key={biz.id}
+              onClick={() => {
+                select(biz.id);
+                setOpen(false);
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-700 hover:bg-violet-50 transition-colors"
+            >
+              <div className="h-5 w-5 rounded-md bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                {biz.name[0]?.toUpperCase() ?? "B"}
+              </div>
+              <span className="flex-1 text-left truncate">{biz.name}</span>
+              {biz.id === current.id && (
+                <Check className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+              )}
+            </button>
+          ))}
+          <div className="border-t border-slate-100">
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/onboarding");
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-violet-600 hover:bg-violet-50 transition-colors font-medium"
+            >
+              <div className="h-5 w-5 rounded-md bg-violet-100 flex items-center justify-center shrink-0">
+                <Plus className="h-3 w-3" />
+              </div>
+              Add a business
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -156,6 +220,9 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </div>
+
+          {/* Business switcher */}
+          <BusinessSwitcher />
 
           {/* Nav */}
           <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">

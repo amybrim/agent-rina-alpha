@@ -9,6 +9,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import {
   createBusiness,
   getBusinessForUser,
+  listBusinessesForUser,
   getFullProfile,
   markOnboardingComplete,
   updateBusiness,
@@ -117,12 +118,6 @@ export const appRouter = router({
     get: protectedProcedure.query(async ({ ctx }) => {
       return getBusinessForUser(ctx.user.openId);
     }),
-    // list returns the user's single business as an array for UI compatibility
-    list: protectedProcedure.query(async ({ ctx }) => {
-      const biz = await getBusinessForUser(ctx.user.openId);
-      return biz ? [biz] : [];
-    }),
-
     getFullProfile: protectedProcedure
       .input(z.object({ businessId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -130,6 +125,10 @@ export const appRouter = router({
         if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
         return getFullProfile(input.businessId);
       }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return listBusinessesForUser(ctx.user.openId);
+    }),
 
     create: protectedProcedure
       .input(
@@ -144,8 +143,6 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const existing = await getBusinessForUser(ctx.user.openId);
-        if (existing) throw new TRPCError({ code: "CONFLICT", message: "Business already exists" });
         return createBusiness({ ...input, userId: ctx.user.openId });
       }),
 

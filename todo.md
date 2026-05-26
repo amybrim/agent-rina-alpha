@@ -183,3 +183,13 @@
 - [ ] Rule 4: GBP/review findings must be labeled confidence:unknown when no GBP integration is connected for that business
 - [ ] Run TypeScript check and all tests after changes
 - [ ] Save checkpoint
+
+---
+
+## Visual Redesign — Match Mockup Design Language
+
+- [ ] Remove business limit for Amy's account (amybrim11@gmail.com) in DB
+- [ ] Update global theme: purple/indigo palette (#6366F1 primary), Inter/Plus Jakarta Sans typography, sidebar brand logo
+- [ ] Redesign Command Center: metric tiles with icons, Rina character illustration, fix queue cards with status badges, GEO readiness panel
+- [ ] Redesign Weekly Meeting: 5-question cards with icons and status badges, AI Lead Signals panel, Rina Can Help panel, pipeline tracker bar
+- [ ] Run TypeScript check and save checkpoint after redesign

@@ -1,10 +1,25 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { fixItems, visibilityBriefings, visibilityFindings } from "../../../drizzle/schema";
-import type { InferSelectModel } from "drizzle-orm";
 
 export type Grade = "clear" | "partial" | "not_yet_visible";
 export type HealthGrade = "STRONG" | "IMPROVING" | "AT_RISK" | "NEEDS_WORK";
+
+/** GEO readiness category breakdown for the Command Center panel */
+export interface GeoCategory {
+  label: string;
+  findingType: string;
+  grade: Grade;
+}
+
+const GEO_CATEGORY_MAP: Array<{ label: string; findingType: string }> = [
+  { label: "Clear Offers", findingType: "offer_clarity_gap" },
+  { label: "Structured Data", findingType: "structured_data_gap" },
+  { label: "Proof Signals", findingType: "proof_trust_gap" },
+  { label: "Answer Readiness", findingType: "answer_readiness_gap" },
+  { label: "Entity Clarity", findingType: "entity_clarity_gap" },
+  { label: "Source Corroboration", findingType: "source_corroboration_gap" },
+];
 
 export interface VisibilitySnapshot {
   businessId: number;
@@ -14,6 +29,7 @@ export interface VisibilitySnapshot {
   trust: Grade;
   recommendationReady: Grade;
   geoReadiness: Grade;
+  geoCategories: GeoCategory[];
   openFindings: number;
   criticalFindings: number;
   activeFixCount: number;
@@ -88,6 +104,20 @@ export async function getVisibilitySnapshot(businessId: number): Promise<Visibil
     confidence = "inferred";
   }
 
+  // Build GEO category breakdown from findings
+  const geoCategories: GeoCategory[] = GEO_CATEGORY_MAP.map(({ label, findingType }) => {
+    const categoryFindings = openFindings.filter((f) => f.findingType === findingType);
+    let grade: Grade;
+    if (categoryFindings.length === 0) {
+      grade = "clear";
+    } else if (categoryFindings.some((f) => f.severity === "critical" || f.severity === "high")) {
+      grade = "not_yet_visible";
+    } else {
+      grade = "partial";
+    }
+    return { label, findingType, grade };
+  });
+
   const grades: Grade[] = [showingUp, beingUnderstood, trust, recommendationReady, geoReadiness];
   const healthGrade = computeHealthGrade(grades);
 
@@ -99,6 +129,7 @@ export async function getVisibilitySnapshot(businessId: number): Promise<Visibil
     trust,
     recommendationReady,
     geoReadiness,
+    geoCategories,
     openFindings: openFindings.length,
     criticalFindings: criticalFindings.length,
     activeFixCount,

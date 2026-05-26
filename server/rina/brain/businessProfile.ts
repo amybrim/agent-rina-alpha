@@ -23,6 +23,14 @@ export async function getBusinessForUser(userId: string): Promise<Business | nul
   return biz ?? null;
 }
 
+export async function listBusinessesForUser(userId: string): Promise<Business[]> {
+  return db
+    .select()
+    .from(businesses)
+    .where(eq(businesses.userId, userId))
+    .orderBy(businesses.createdAt);
+}
+
 export async function getBusinessById(businessId: number): Promise<Business | null> {
   const [biz] = await db
     .select()
