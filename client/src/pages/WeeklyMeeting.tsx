@@ -5,7 +5,6 @@
  *
  * No numerical scores. No /100. Grades only: CLEAR / PARTIAL / NOT_YET_VISIBLE.
  */
-import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GradePill } from "@/components/ConfidenceLabel";
@@ -193,21 +192,21 @@ export default function WeeklyMeeting() {
   // ─── Loading ──────────────────────────────────────────────────────────────
   if (bizLoading) {
     return (
-      <RinaLayout>
+      <>
         <div className="space-y-6 py-2">
           <Skeleton className="h-8 w-64" />
           <div className="grid grid-cols-5 gap-3">
             {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
           </div>
         </div>
-      </RinaLayout>
+      </>
     );
   }
 
   // ─── No business ──────────────────────────────────────────────────────────
   if (hasNone) {
     return (
-      <RinaLayout>
+      <>
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="h-16 w-16 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center mb-4">
             <Sparkles className="h-7 w-7" />
@@ -225,14 +224,14 @@ export default function WeeklyMeeting() {
             <Sparkles className="mr-2 h-4 w-4" /> Start the interview
           </Button>
         </div>
-      </RinaLayout>
+      </>
     );
   }
 
   // ─── No briefing yet ──────────────────────────────────────────────────────
   if (!b && !briefing.isLoading) {
     return (
-      <RinaLayout>
+      <>
         <div className="space-y-6 py-2">
           <WeeklyHeader weekLabel={weekLabel} businessName={current?.name} />
           <div className="rounded-2xl border border-violet-100 bg-violet-50 p-8 text-center">
@@ -278,13 +277,13 @@ export default function WeeklyMeeting() {
             </div>
           </div>
         </div>
-      </RinaLayout>
+      </>
     );
   }
 
   // ─── Full meeting ─────────────────────────────────────────────────────────
   return (
-    <RinaLayout>
+    <>
       <div className="space-y-7 py-2">
 
         {/* ── Header ────────────────────────────────────────────────────── */}
@@ -525,7 +524,7 @@ export default function WeeklyMeeting() {
         </div>
 
       </div>
-    </RinaLayout>
+    </>
   );
 }
 

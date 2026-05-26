@@ -5,7 +5,6 @@
  *
  * No numerical scores. No /100. Grades only.
  */
-import RinaLayout from "@/components/RinaLayout";
 import { Button } from "@/components/ui/button";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -176,7 +175,7 @@ export default function CommandCenter() {
   // ─── No business ─────────────────────────────────────────────────────────
   if (!isLoading && hasNone) {
     return (
-      <RinaLayout>
+      <>
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="h-16 w-16 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center mb-4">
             <Sparkles className="h-7 w-7" />
@@ -194,12 +193,12 @@ export default function CommandCenter() {
             <Sparkles className="mr-2 h-4 w-4" /> Start the interview
           </Button>
         </div>
-      </RinaLayout>
+      </>
     );
   }
 
   return (
-    <RinaLayout>
+    <>
       <div className="space-y-6">
 
         {/* ── Page header ───────────────────────────────────────────────── */}
@@ -567,6 +566,6 @@ export default function CommandCenter() {
         </div>
 
       </div>
-    </RinaLayout>
+    </>
   );
 }

@@ -1,4 +1,3 @@
-import RinaLayout from "@/components/RinaLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -77,14 +76,14 @@ export default function FixDetail() {
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  if (!id) return <RinaLayout><div>Not found.</div></RinaLayout>;
+  if (!id) return <><div>Not found.</div></>;
 
   const data = fixQuery.data;
   if (!data) {
     return (
-      <RinaLayout>
+      <>
         <div className="text-muted-foreground">Loading…</div>
-      </RinaLayout>
+      </>
     );
   }
   const fix = data;
@@ -93,7 +92,7 @@ export default function FixDetail() {
   const decisionHistory = decisionHistoryQuery.data ?? [];
 
   return (
-    <RinaLayout>
+    <>
       <Link
         href="/app/fixes"
         className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-700 mb-4"
@@ -255,6 +254,6 @@ export default function FixDetail() {
           </Card>
         </div>
       </div>
-    </RinaLayout>
+    </>
   );
 }
