@@ -1,16 +1,17 @@
 /**
- * WeeklyMeeting — the primary page at /app.
- * Matches the mockup: header with week date, 5 question cards with icons,
- * AI Lead Signals section, Rina Can Help action grid, 5-stage pipeline tracker.
+ * WeeklyMeeting — rebuilt to match the mockup exactly.
  *
- * No numerical scores. No /100. Grades only: CLEAR / PARTIAL / NOT_YET_VISIBLE.
+ * Layout:
+ * • Header: "Rina's Weekly Visibility Meeting" + business name + week date + refresh
+ * • Big violet headline: "How are we doing with AI visibility this week? ✦"
+ * • 5 question cards in a row — each with: number badge, icon, question, grade badge, Rina interpretation, chevron
+ * • Two bottom panels: AI Lead Signals (left) + Rina Can Help (right)
+ * • 5-stage pipeline bar at the very bottom
  */
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GradePill } from "@/components/ConfidenceLabel";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowRight,
   CalendarDays,
@@ -36,500 +37,127 @@ import { useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 
-// ─── Grade display ────────────────────────────────────────────────────────────
+// ─── Grade helpers ────────────────────────────────────────────────────────────
 type Grade = "clear" | "partial" | "not_yet_visible" | null | undefined;
 
-const GRADE_LABEL: Record<string, string> = {
-  clear: "Improving",
-  partial: "Needs Proof",
-  not_yet_visible: "Watch",
-};
+function GradeBadge({ grade }: { grade: Grade }) {
+  if (!grade) return <span className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-400">—</span>;
 
-const GRADE_BADGE_CLASS: Record<string, string> = {
-  clear: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-  partial: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  not_yet_visible: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
-};
+  const cfg: Record<string, { label: string; cls: string }> = {
+    clear:            { label: "Improving",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    partial:          { label: "Needs Proof",   cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    not_yet_visible:  { label: "Watch",         cls: "bg-slate-50 text-slate-600 border-slate-200" },
+  };
 
-const GRADE_ICON_BG: Record<string, string> = {
-  clear: "bg-emerald-50 text-emerald-600",
-  partial: "bg-amber-50 text-amber-600",
-  not_yet_visible: "bg-rose-50 text-rose-500",
-};
-
-// ─── Five question definitions ────────────────────────────────────────────────
-const QUESTIONS = [
-  {
-    key: "showingUpGrade" as const,
-    number: 1,
-    icon: Eye,
-    question: "Are we showing up?",
-    caption: "Visibility up vs last week",
-    emptyCaption: "Run a scan to measure visibility",
-  },
-  {
-    key: "beingUnderstoodGrade" as const,
-    number: 2,
-    icon: MessageSquareText,
-    question: "Are we being understood?",
-    caption: "Add clearer answers and examples",
-    emptyCaption: "Schema + clarity not yet measured",
-  },
-  {
-    key: "trustGrade" as const,
-    number: 3,
-    icon: ShieldCheck,
-    question: "Are we trusted?",
-    caption: "Add 2–3 proof points",
-    emptyCaption: "Authority not yet measured",
-  },
-  {
-    key: "recommendationReadyGrade" as const,
-    number: 4,
-    icon: Star,
-    question: "Are we recommendation-ready?",
-    caption: "Strong signals — keep building",
-    emptyCaption: "Citability not yet measured",
-  },
-  {
-    key: "geoReadinessGrade" as const,
-    number: 5,
-    icon: Wrench,
-    question: "What should we fix next?",
-    caption: "High-impact fixes identified",
-    emptyCaption: "Run a scan to surface fixes",
-  },
-] as const;
-
-// ─── Pipeline stages ──────────────────────────────────────────────────────────
-const PIPELINE_STAGES = [
-  { label: "Recommended", statuses: ["recommended", "found"], icon: Lightbulb, hint: "priorities identified" },
-  { label: "Drafted", statuses: ["drafted", "needs_input", "ready_for_review"], icon: Pencil, hint: "in progress" },
-  { label: "Approved", statuses: ["approved"], icon: CheckCircle2, hint: "ready to publish" },
-  { label: "Published", statuses: ["published", "scheduled"], icon: CloudUpload, hint: "live across channels" },
-  { label: "Verified", statuses: ["verified"], icon: ShieldCheck, hint: "tracking impact" },
-] as const;
-
-// ─── Rina Can Help actions ────────────────────────────────────────────────────
-const RINA_ACTIONS = [
-  { label: "Draft FAQ", icon: MessageSquareText, hint: "Answer top customer questions" },
-  { label: "Update Metadata", icon: FileText, hint: "Refine titles and descriptions" },
-  { label: "Create Blog Post", icon: Pencil, hint: "Publish a fresh signal" },
-  { label: "Send to Wix", icon: Send, hint: "Push approved fixes" },
-  { label: "Schedule Social Post", icon: CalendarDays, hint: "Reinforce visibility" },
-  { label: "Verify Change", icon: ShieldCheck, hint: "Confirm fixes landed" },
-] as const;
-
-// ─── Component ────────────────────────────────────────────────────────────────
-export default function WeeklyMeeting() {
-  const { user } = useAuth({ redirectOnUnauthenticated: true });
-  const { current, isLoading: bizLoading, hasNone } = useCurrentBusiness();
-  const [, navigate] = useLocation();
-
-  const utils = trpc.useUtils();
-
-  const briefing = trpc.briefing.latest.useQuery(
-    { businessId: current?.id ?? 0 },
-    { enabled: !!current }
-  );
-
-  const snapshot = trpc.snapshot.get.useQuery(
-    { businessId: current?.id ?? 0 },
-    { enabled: !!current }
-  );
-
-  const fixes = trpc.fixes.list.useQuery(
-    { businessId: current?.id ?? 0 },
-    { enabled: !!current }
-  );
-
-  const leads = trpc.leads.summary.useQuery(
-    { businessId: current?.id ?? 0 },
-    { enabled: !!current }
-  );
-
-  const generateBriefing = trpc.briefing.generate.useMutation({
-    onSuccess: () => {
-      utils.briefing.latest.invalidate({ businessId: current!.id });
-      utils.snapshot.get.invalidate({ businessId: current!.id });
-      toast.success("Briefing updated.");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const runScan = trpc.scanner.run.useMutation({
-    onSuccess: () => {
-      utils.snapshot.get.invalidate({ businessId: current!.id });
-      utils.fixes.list.invalidate({ businessId: current!.id });
-      toast.success("Scan complete. Refreshing your meeting…");
-    },
-    onError: (e) => toast.error("Scan failed: " + e.message),
-  });
-
-  const isScanning = runScan.isPending;
-  const isGenerating = generateBriefing.isPending;
-  const isBusy = isScanning || isGenerating;
-
-  // Pipeline counts
-  const fixList = fixes.data ?? [];
-  const pipelineCounts = PIPELINE_STAGES.map((stage) => ({
-    ...stage,
-    count: fixList.filter((f) => stage.statuses.includes(f.status as never)).length,
-  }));
-
-  const b = briefing.data;
-  const snap = snapshot.data;
-
-  // Week label
-  const weekLabel = b?.weekStartDate
-    ? `Week of ${new Date(b.weekStartDate).toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })}`
-    : `Week of ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
-
-  // ─── Loading ──────────────────────────────────────────────────────────────
-  if (bizLoading) {
-    return (
-      <>
-        <div className="space-y-6 py-2">
-          <Skeleton className="h-8 w-64" />
-          <div className="grid grid-cols-5 gap-3">
-            {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // ─── No business ──────────────────────────────────────────────────────────
-  if (hasNone) {
-    return (
-      <>
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="h-16 w-16 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center mb-4">
-            <Sparkles className="h-7 w-7" />
-          </div>
-          <h2 className="font-display text-2xl text-slate-800 mb-2">
-            Let's introduce Rina to your business.
-          </h2>
-          <p className="text-slate-500 text-sm max-w-sm mb-6">
-            Before Rina can run your weekly meeting, she needs to understand what you do and who you serve.
-          </p>
-          <Button
-            onClick={() => navigate("/onboarding")}
-            className="bg-violet-600 hover:bg-violet-700 text-white"
-          >
-            <Sparkles className="mr-2 h-4 w-4" /> Start the interview
-          </Button>
-        </div>
-      </>
-    );
-  }
-
-  // ─── No briefing yet ──────────────────────────────────────────────────────
-  if (!b && !briefing.isLoading) {
-    return (
-      <>
-        <div className="space-y-6 py-2">
-          <WeeklyHeader weekLabel={weekLabel} businessName={current?.name} />
-          <div className="rounded-2xl border border-violet-100 bg-violet-50 p-8 text-center">
-            <div className="h-12 w-12 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <h3 className="font-display text-xl text-slate-800 mb-2">
-              Your first meeting is almost ready.
-            </h3>
-            <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
-              {snap && snap.openFindings > 0
-                ? `I found ${snap.openFindings} signal${snap.openFindings !== 1 ? "s" : ""} on your first scan. Let me write your briefing.`
-                : "I need to scan your website before I can write your briefing."}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              {snap && snap.openFindings > 0 ? (
-                <Button
-                  onClick={() => generateBriefing.mutate({ businessId: current!.id })}
-                  disabled={isBusy}
-                  className="bg-violet-600 hover:bg-violet-700 text-white"
-                >
-                  {isGenerating ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  Write my briefing
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => runScan.mutate({ businessId: current!.id })}
-                  disabled={isBusy}
-                  className="bg-violet-600 hover:bg-violet-700 text-white"
-                >
-                  {isScanning ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Scan my website
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // ─── Full meeting ─────────────────────────────────────────────────────────
+  const { label, cls } = cfg[grade] ?? cfg.not_yet_visible;
   return (
-    <>
-      <div className="space-y-7 py-2">
-
-        {/* ── Header ────────────────────────────────────────────────────── */}
-        <WeeklyHeader
-          weekLabel={weekLabel}
-          businessName={current?.name}
-          onRefresh={() => current && runScan.mutate({ businessId: current.id })}
-          isBusy={isBusy}
-        />
-
-        {/* ── Big question headline ─────────────────────────────────────── */}
-        <div>
-          <h2 className="font-display text-3xl text-violet-700 leading-tight">
-            How are we doing with AI visibility this week?{" "}
-            <span className="text-amber-400">✦</span>
-          </h2>
-          <p className="text-sm text-slate-500 mt-2">
-            Your AI visibility snapshot, insights, and actions — so we keep getting better.
-          </p>
-        </div>
-
-        {/* ── Five question cards ───────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {QUESTIONS.map((q) => {
-            const grade = b ? (b[q.key] as Grade) : undefined;
-            const Icon = q.icon;
-            const gradeLabel = grade ? (GRADE_LABEL[grade] ?? grade) : "Pending";
-            const badgeClass = grade ? (GRADE_BADGE_CLASS[grade] ?? GRADE_BADGE_CLASS.not_yet_visible) : "bg-slate-100 text-slate-500";
-            const iconBg = grade ? (GRADE_ICON_BG[grade] ?? GRADE_ICON_BG.not_yet_visible) : "bg-slate-100 text-slate-400";
-            const caption = grade ? q.caption : q.emptyCaption;
-
-            return (
-              <button
-                key={q.key}
-                onClick={() => navigate("/app/scorecard")}
-                className="group text-left rounded-2xl border border-slate-200 bg-white p-5 flex flex-col items-center text-center hover:border-violet-200 hover:shadow-[0_8px_36px_-16px_rgba(80,40,160,0.22)] transition-all duration-200 active:scale-[0.99]"
-              >
-                {/* Number badge */}
-                <div className="h-6 w-6 rounded-full bg-violet-100 text-violet-600 text-[11px] font-bold flex items-center justify-center mb-3">
-                  {q.number}
-                </div>
-                {/* Icon */}
-                <div className={`h-12 w-12 rounded-2xl flex items-center justify-center mb-3 transition-colors ${iconBg}`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                {/* Question */}
-                <div className="font-display text-sm leading-snug mb-2.5 text-slate-800">
-                  {q.question}
-                </div>
-                {/* Grade badge */}
-                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass}`}>
-                  {gradeLabel}
-                </span>
-                {/* Caption */}
-                <div className="text-[11px] text-slate-400 mt-2.5 line-clamp-2 leading-relaxed">
-                  {caption}
-                </div>
-                {/* Arrow */}
-                <div className="mt-3 text-slate-300 group-hover:text-violet-400 transition-colors">
-                  <ChevronRight className="h-4 w-4" />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── AI Lead Signals + Rina Can Help ──────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-          {/* AI Lead Signals */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-emerald-600" />
-                  <h3 className="font-display text-base text-slate-800">AI Lead Signals</h3>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">Where your leads are coming from.</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <LeadSignalRow
-                icon={CheckCircle2}
-                iconClass="text-emerald-600 bg-emerald-50"
-                label="Confirmed AI-assisted leads"
-                value={leads.data?.confirmedAi ?? "—"}
-              />
-              <LeadSignalRow
-                icon={HelpCircle}
-                iconClass="text-amber-600 bg-amber-50"
-                label="Likely visibility-influenced leads"
-                value={leads.data?.likelyAi ?? "—"}
-              />
-              <LeadSignalRow
-                icon={HelpCircle}
-                iconClass="text-slate-400 bg-slate-50"
-                label="Unknown source"
-                value={leads.data?.unknown ?? "—"}
-              />
-            </div>
-
-            <div className="border-t border-slate-100 mt-4 pt-3 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Total tracked</span>
-              <span className="font-display text-xl text-slate-800">
-                {leads.data
-                  ? (leads.data.confirmedAi ?? 0) + (leads.data.likelyAi ?? 0) + (leads.data.unknown ?? 0)
-                  : "—"}
-              </span>
-            </div>
-          </div>
-
-          {/* Rina Can Help */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-violet-600" />
-                  <h3 className="font-display text-base text-slate-800">Rina Can Help</h3>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Take action, update content, and integrate — faster.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {RINA_ACTIONS.map((a) => {
-                const Icon = a.icon;
-                return (
-                  <button
-                    key={a.label}
-                    onClick={() => navigate("/app/fixes")}
-                    className="group flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-left hover:border-violet-200 hover:bg-violet-50/40 transition-colors"
-                  >
-                    <div className="h-7 w-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 text-violet-600 group-hover:border-violet-200 transition-colors">
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium text-slate-800 leading-tight truncate">
-                        {a.label}
-                      </div>
-                    </div>
-                    <ChevronRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-violet-400 transition-colors shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* ── 5-Stage Pipeline Tracker ──────────────────────────────────── */}
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              Fix pipeline
-            </div>
-            <Button
-              size="sm"
-              className="bg-violet-600 hover:bg-violet-700 text-white h-8 text-xs"
-              onClick={() => {
-                if (b) navigate("/app/briefing");
-                else if (snap) generateBriefing.mutate({ businessId: current!.id });
-                else toast.message("Run your first scan to unlock briefings.");
-              }}
-              disabled={isBusy}
-            >
-              {isBusy ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              {b ? "View Full Action Plan" : "Generate Action Plan"}
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {pipelineCounts.map((stage, i) => {
-              const Icon = stage.icon;
-              return (
-                <div key={stage.label} className="flex-1 flex items-center gap-2">
-                  <button
-                    onClick={() => navigate("/app/fixes")}
-                    className="flex-1 group flex flex-col items-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50/50 px-2 py-3 hover:border-violet-200 hover:bg-violet-50/40 transition-colors text-center"
-                  >
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${stage.count > 0 ? "bg-violet-100 text-violet-600" : "bg-slate-100 text-slate-400"}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className={`font-display text-xl font-bold leading-none ${stage.count > 0 ? "text-violet-600" : "text-slate-300"}`}>
-                      {stage.count}
-                    </div>
-                    <div className="text-[10px] text-slate-500 leading-tight">
-                      {stage.label}
-                    </div>
-                    <div className="text-[10px] text-slate-400 leading-tight">
-                      {stage.hint}
-                    </div>
-                  </button>
-                  {i < pipelineCounts.length - 1 && (
-                    <ArrowRight className="h-3.5 w-3.5 text-slate-300 shrink-0" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── Refresh controls ──────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 pt-1 border-t border-slate-100">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => current && runScan.mutate({ businessId: current.id })}
-            disabled={isBusy}
-            className="bg-white"
-          >
-            {isScanning ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            Run new scan
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => current && generateBriefing.mutate({ businessId: current.id })}
-            disabled={isBusy}
-            className="bg-white"
-          >
-            {isGenerating ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            Refresh briefing
-          </Button>
-        </div>
-
-      </div>
-    </>
+    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${cls}`}>
+      {label}
+    </span>
   );
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+function DraftReadyBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+      Draft Ready
+    </span>
+  );
+}
 
+// ─── Interpretation copy per grade ───────────────────────────────────────────
+const INTERP: Record<string, Record<string, string>> = {
+  showing_up: {
+    clear:           "Visibility up vs. last week",
+    partial:         "Showing up in some searches",
+    not_yet_visible: "Not yet appearing in AI results",
+  },
+  being_understood: {
+    clear:           "AI describes you accurately",
+    partial:         "Add clearer answers and examples",
+    not_yet_visible: "AI can't interpret your offer yet",
+  },
+  trusted: {
+    clear:           "Strong signals — keep building",
+    partial:         "Add 2–3 proof points",
+    not_yet_visible: "Trust signals not yet detected",
+  },
+  recommendation_ready: {
+    clear:           "Strong signals — keep building",
+    partial:         "Almost recommendation-ready",
+    not_yet_visible: "Not yet in recommendation pool",
+  },
+};
+
+// ─── 5 question card definitions ─────────────────────────────────────────────
+const QUESTIONS = [
+  {
+    num: 1,
+    key: "showing_up",
+    question: "Are we showing up?",
+    icon: Eye,
+    iconColor: "text-violet-500",
+    iconBg: "bg-violet-50",
+    link: "/app/scorecard",
+  },
+  {
+    num: 2,
+    key: "being_understood",
+    question: "Are we being understood?",
+    icon: MessageSquareText,
+    iconColor: "text-pink-500",
+    iconBg: "bg-pink-50",
+    link: "/app/scorecard",
+  },
+  {
+    num: 3,
+    key: "trusted",
+    question: "Are we trusted?",
+    icon: ShieldCheck,
+    iconColor: "text-violet-500",
+    iconBg: "bg-violet-50",
+    link: "/app/scorecard",
+  },
+  {
+    num: 4,
+    key: "recommendation_ready",
+    question: "Are we recommendation-ready?",
+    icon: Star,
+    iconColor: "text-amber-500",
+    iconBg: "bg-amber-50",
+    link: "/app/scorecard",
+  },
+  {
+    num: 5,
+    key: "fix_priority",
+    question: "What should we fix next?",
+    icon: Wrench,
+    iconColor: "text-violet-500",
+    iconBg: "bg-violet-50",
+    link: "/app/fixes",
+  },
+];
+
+// ─── Rina Can Help actions ────────────────────────────────────────────────────
+const RINA_ACTIONS = [
+  { label: "Draft FAQ",           icon: FileText,        link: "/app/fixes" },
+  { label: "Update Metadata",     icon: Pencil,          link: "/app/fixes" },
+  { label: "Create Blog Post",    icon: FileText,        link: "/app/fixes" },
+  { label: "Send to Wix",         icon: Send,            link: "/app/integrations" },
+  { label: "Schedule Social Post",icon: CalendarDays,    link: "/app/integrations" },
+  { label: "Verify Change",       icon: CheckCircle2,    link: "/app/fixes" },
+];
+
+// ─── Pipeline stages ──────────────────────────────────────────────────────────
+const PIPELINE_STAGES = [
+  { key: "recommended", label: "Recommended", sub: "priorities identified", icon: Lightbulb, color: "text-amber-600", bg: "bg-amber-50", filter: ["recommended"] },
+  { key: "drafted",     label: "Drafted",     sub: "In progress",           icon: Pencil,    color: "text-violet-600", bg: "bg-violet-50", filter: ["drafted", "needs_input"] },
+  { key: "approved",    label: "Approved",    sub: "Ready to publish",      icon: CheckCircle2, color: "text-teal-600", bg: "bg-teal-50", filter: ["approved", "ready_for_review"] },
+  { key: "published",   label: "Published",   sub: "Live across channels",  icon: CloudUpload, color: "text-blue-600", bg: "bg-blue-50", filter: ["scheduled", "published"] },
+  { key: "verified",    label: "Verified",    sub: "Tracking impact",       icon: ShieldCheck, color: "text-emerald-600", bg: "bg-emerald-50", filter: ["verified"] },
+];
+
+// ─── Header ───────────────────────────────────────────────────────────────────
 function WeeklyHeader({
   weekLabel,
   businessName,
@@ -544,27 +172,25 @@ function WeeklyHeader({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="font-display text-2xl text-slate-800 leading-tight">
+        <h1 className="font-display text-2xl font-bold text-slate-800 leading-tight">
           Rina's Weekly Visibility Meeting
         </h1>
         {businessName && (
-          <p className="text-sm text-slate-500 mt-1">
-            <span className="font-medium text-slate-700">{businessName}</span>
-          </p>
+          <div className="text-sm text-slate-500 mt-0.5">{businessName}</div>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
-          <CalendarDays className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
+          <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
           {weekLabel}
         </div>
         {onRefresh && (
           <Button
             variant="outline"
             size="sm"
+            className="h-8 w-8 p-0"
             onClick={onRefresh}
             disabled={isBusy}
-            className="bg-white h-8"
           >
             {isBusy ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -578,26 +204,335 @@ function WeeklyHeader({
   );
 }
 
-function LeadSignalRow({
-  icon: Icon,
-  iconClass,
-  label,
-  value,
-}: {
-  icon: typeof CheckCircle2;
-  iconClass: string;
-  label: string;
-  value: number | string;
-}) {
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function WeeklyMeeting() {
+  const { businessId, current, hasNone, isLoading: bizLoading } = useCurrentBusiness();
+  const [, navigate] = useLocation();
+
+  const snap = trpc.snapshot.get.useQuery(
+    { businessId: businessId ?? 0 },
+    { enabled: !!businessId }
+  );
+  const briefing = trpc.briefing.latest.useQuery(
+    { businessId: businessId ?? 0 },
+    { enabled: !!businessId }
+  );
+  const leadSignals = trpc.leads.summary.useQuery(
+    { businessId: businessId ?? 0 },
+    { enabled: !!businessId }
+  );
+  const fixes = trpc.fixes.list.useQuery(
+    { businessId: businessId ?? 0 },
+    { enabled: !!businessId }
+  );
+
+  const runScan = trpc.scanner.run.useMutation({
+    onSuccess: () => {
+      snap.refetch();
+      briefing.refetch();
+      toast.success("Scan complete — refreshing your meeting.");
+    },
+    onError: () => toast.error("Scan failed. Please try again."),
+  });
+  const generateBriefing = trpc.briefing.generate.useMutation({
+    onSuccess: () => {
+      briefing.refetch();
+      toast.success("Briefing generated!");
+    },
+    onError: () => toast.error("Could not generate briefing."),
+  });
+
+  const isScanning = runScan.isPending;
+  const isGenerating = generateBriefing.isPending;
+  const isBusy = isScanning || isGenerating;
+
+  const weekLabel = useMemo(() => {
+    const d = snap.data?.weekStartDate ? new Date(snap.data.weekStartDate) : new Date();
+    const end = new Date(d);
+    end.setDate(end.getDate() + 6);
+    const fmt = (dt: Date) =>
+      dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `Week of ${fmt(d)} – ${fmt(end)}, ${d.getFullYear()}`;
+  }, [snap.data?.weekStartDate]);
+
+  // Pipeline counts
+  const pipelineCounts = useMemo(() => {
+    const all = fixes.data ?? [];
+    return PIPELINE_STAGES.map((stage) => ({
+      ...stage,
+      count: all.filter((f) => stage.filter.includes(f.status)).length,
+    }));
+  }, [fixes.data]);
+
+  // Grade data from snapshot
+  const s = snap.data;
+  const gradeMap: Record<string, Grade> = {
+    showing_up:          s?.showingUp,
+    being_understood:    s?.beingUnderstood,
+    trusted:             s?.trust,
+    recommendation_ready: s?.recommendationReady,
+    fix_priority:        null, // uses fix count instead
+  };
+
+  // ─── Loading ────────────────────────────────────────────────────────────
+  if (bizLoading) {
+    return (
+      <div className="space-y-6 py-2">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid grid-cols-5 gap-3">
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-52 rounded-2xl" />)}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── No business ────────────────────────────────────────────────────────
+  if (hasNone) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="h-16 w-16 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center mb-4">
+          <Sparkles className="h-7 w-7" />
+        </div>
+        <h2 className="font-display text-2xl text-slate-800 mb-2">
+          Let's introduce Rina to your business.
+        </h2>
+        <p className="text-slate-500 text-sm max-w-sm mb-6">
+          Before Rina can run your weekly meeting, she needs to understand what you do and who you serve.
+        </p>
+        <Button onClick={() => navigate("/onboarding")} className="bg-violet-600 hover:bg-violet-700 text-white">
+          <Sparkles className="mr-2 h-4 w-4" /> Start the interview
+        </Button>
+      </div>
+    );
+  }
+
+  // ─── No briefing yet ────────────────────────────────────────────────────
+  if (!briefing.data && !briefing.isLoading) {
+    return (
+      <div className="space-y-6 py-2">
+        <WeeklyHeader weekLabel={weekLabel} businessName={current?.name} />
+        <div className="rounded-2xl border border-violet-100 bg-violet-50 p-8 text-center">
+          <div className="h-12 w-12 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center mx-auto mb-4">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <h3 className="font-display text-xl text-slate-800 mb-2">Your first meeting is almost ready.</h3>
+          <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
+            {s && s.openFindings > 0
+              ? `I found ${s.openFindings} signal${s.openFindings !== 1 ? "s" : ""} on your first scan. Let me write your briefing.`
+              : "I need to scan your website before I can write your briefing."}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            {s && s.openFindings > 0 ? (
+              <Button
+                onClick={() => generateBriefing.mutate({ businessId: current!.id })}
+                disabled={isBusy}
+                className="bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                Write my briefing
+              </Button>
+            ) : (
+              <Button
+                onClick={() => runScan.mutate({ businessId: current!.id })}
+                disabled={isBusy}
+                className="bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                {isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Scan my website
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Full meeting ────────────────────────────────────────────────────────
+  const activeFixCount = s?.activeFixCount ?? 0;
+  const ls = leadSignals.data;
+
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${iconClass}`}>
-        <Icon className="h-4 w-4" />
+    <div className="space-y-6 py-2">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <WeeklyHeader
+        weekLabel={weekLabel}
+        businessName={current?.name}
+        onRefresh={() => current && runScan.mutate({ businessId: current.id })}
+        isBusy={isBusy}
+      />
+
+      {/* ── Big headline ────────────────────────────────────────────────── */}
+      <div>
+        <h2 className="font-display text-3xl font-bold text-violet-700 leading-tight flex items-center gap-2 flex-wrap">
+          How are we doing with AI visibility this week?
+          <span className="text-amber-400 text-2xl">✦</span>
+        </h2>
+        <p className="text-slate-500 text-sm mt-1">
+          Your AI visibility snapshot, insights, and actions — so we keep getting better.
+        </p>
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm text-slate-700 leading-tight">{label}</div>
+
+      {/* ── 5 Question cards ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {QUESTIONS.map((q) => {
+          const Icon = q.icon;
+          const grade = gradeMap[q.key];
+          const interp =
+            q.key === "fix_priority"
+              ? `${activeFixCount} high-impact fix${activeFixCount !== 1 ? "es" : ""} identified`
+              : (INTERP[q.key]?.[grade ?? "not_yet_visible"] ?? "");
+
+          return (
+            <Link
+              key={q.key}
+              href={q.link}
+              className="group flex flex-col rounded-2xl border border-slate-100 bg-white p-4 hover:border-violet-200 hover:shadow-sm transition-all duration-150 cursor-pointer"
+            >
+              {/* Number badge */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="h-6 w-6 rounded-full bg-violet-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                  {q.num}
+                </div>
+              </div>
+
+              {/* Icon */}
+              <div className={`h-10 w-10 rounded-xl ${q.iconBg} flex items-center justify-center mb-3`}>
+                <Icon className={`h-5 w-5 ${q.iconColor}`} />
+              </div>
+
+              {/* Question */}
+              <div className="font-semibold text-slate-800 text-sm leading-snug mb-3 flex-1">
+                {q.question}
+              </div>
+
+              {/* Grade badge */}
+              <div className="mb-2">
+                {q.key === "fix_priority" ? (
+                  <DraftReadyBadge />
+                ) : (
+                  <GradeBadge grade={grade} />
+                )}
+              </div>
+
+              {/* Rina interpretation */}
+              <div className="text-[11px] text-slate-400 leading-relaxed mb-3 min-h-[2.5rem]">
+                {interp}
+              </div>
+
+              {/* Chevron */}
+              <div className="flex justify-end">
+                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-violet-500 transition-colors" />
+              </div>
+            </Link>
+          );
+        })}
       </div>
-      <div className="font-display text-xl font-bold text-slate-800">{value}</div>
+
+      {/* ── Bottom two panels ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {/* AI Lead Signals */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="h-4 w-4 text-violet-600" />
+            <h3 className="font-semibold text-slate-800 text-sm">AI Lead Signals</h3>
+          </div>
+          <p className="text-[11px] text-slate-400 mb-4">Where your leads are coming from.</p>
+
+          <div className="space-y-3">
+            {/* Confirmed */}
+            <div className="flex items-center gap-3">
+              <div className="h-7 w-7 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              </div>
+              <span className="flex-1 text-sm text-slate-700">Confirmed AI-assisted leads</span>
+              <span className="font-bold text-emerald-600 text-sm">{ls?.confirmedAi ?? 0}</span>
+            </div>
+            {/* Likely */}
+            <div className="flex items-center gap-3">
+              <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <TrendingUp className="h-3.5 w-3.5 text-amber-600" />
+              </div>
+              <span className="flex-1 text-sm text-slate-700">Likely visibility-influenced leads</span>
+              <span className="font-bold text-amber-600 text-sm">{ls?.likelyAi ?? 0}</span>
+            </div>
+            {/* Unknown */}
+            <div className="flex items-center gap-3">
+              <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
+              </div>
+              <span className="flex-1 text-sm text-slate-700">Unknown source</span>
+              <span className="font-bold text-slate-600 text-sm">{ls?.unknown ?? 0}</span>
+            </div>
+            {/* Divider + Total */}
+            <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+              <span className="text-sm text-slate-500 font-medium">Total</span>
+              <span className="font-bold text-slate-800 text-base">{ls?.total ?? 0}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Rina Can Help */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="h-4 w-4 text-violet-600" />
+            <h3 className="font-semibold text-slate-800 text-sm">Rina Can Help</h3>
+          </div>
+          <p className="text-[11px] text-slate-400 mb-4">Take action, update content, and integrate — faster.</p>
+
+          <div className="grid grid-cols-2 gap-2">
+            {RINA_ACTIONS.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Link
+                  key={action.label}
+                  href={action.link}
+                  className="group flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-left hover:border-violet-200 hover:bg-violet-50/40 transition-colors"
+                >
+                  <Icon className="h-4 w-4 text-slate-500 group-hover:text-violet-600 shrink-0 transition-colors" />
+                  <span className="text-xs font-medium text-slate-700 group-hover:text-violet-700 transition-colors">
+                    {action.label}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-violet-400 ml-auto shrink-0 transition-colors" />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── 5-Stage Pipeline ────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          {pipelineCounts.map((stage, idx) => {
+            const Icon = stage.icon;
+            return (
+              <div key={stage.key} className="flex items-center gap-2">
+                <Link
+                  href={`/app/fixes?status=${stage.filter[0]}`}
+                  className={`group flex flex-col items-center gap-1 rounded-xl border border-slate-100 ${stage.bg} px-4 py-3 hover:border-violet-200 transition-colors text-center min-w-[90px]`}
+                >
+                  <Icon className={`h-4 w-4 ${stage.color}`} />
+                  <span className={`text-xs font-bold ${stage.color}`}>{stage.label}</span>
+                  <span className="text-[10px] text-slate-400">{stage.count} {stage.sub}</span>
+                </Link>
+                {idx < pipelineCounts.length - 1 && (
+                  <ArrowRight className="h-4 w-4 text-slate-300 shrink-0" />
+                )}
+              </div>
+            );
+          })}
+          <div className="ml-auto">
+            <Link href="/app/fixes">
+              <Button className="bg-violet-600 hover:bg-violet-700 text-white text-xs h-9 px-4 gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                View Full Action Plan
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
