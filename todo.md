@@ -193,3 +193,14 @@
 - [ ] Redesign Command Center: metric tiles with icons, Rina character illustration, fix queue cards with status badges, GEO readiness panel
 - [ ] Redesign Weekly Meeting: 5-question cards with icons and status badges, AI Lead Signals panel, Rina Can Help panel, pipeline tracker bar
 - [ ] Run TypeScript check and save checkpoint after redesign
+
+---
+
+## Rearchitecture Brief (2026-05-26)
+
+- [ ] Step 1: Delete Briefing.tsx, Scorecard.tsx, CommandCenter.tsx, ComponentShowcase.tsx, FixDetail.tsx and remove from App.tsx
+- [ ] Step 2: Rename WeeklyMeeting.tsx → RinaBriefing.tsx, update header copy, remove week date pill
+- [ ] Step 3: Rebuild Onboarding.tsx as 4-screen URL-first flow
+- [ ] Step 4: Update Home.tsx CTA text, pillar card copy, briefing teaser headline
+- [ ] Step 5: Add Rina interaction input bar at bottom of RinaBriefing.tsx
+- [ ] Step 6: Verify cleanup, TypeScript check, push to GitHub, checkpoint

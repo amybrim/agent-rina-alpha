@@ -25,8 +25,8 @@ const PILLARS = [
   },
   {
     icon: CalendarCheck,
-    title: "She meets with you each week",
-    body: "Every week Rina answers five questions in plain language: Are we showing up? Are we being understood? Are we trusted? Are we recommendation-ready? What should we fix next?",
+    title: "She's always watching.",
+    body: "Rina doesn't wait for a meeting. She's always monitoring what AI systems know about your business and tells you the moment something changes.",
   },
 ];
 
@@ -54,7 +54,7 @@ export default function Home() {
             </Link>
             <Button asChild>
               <a href={ctaHref}>
-                {isAuthenticated ? "Open your weekly meeting" : "Sign in"}
+                {isAuthenticated ? "Let Rina read your site →" : "Sign in"}
                 <ArrowRight className="ml-1.5 h-4 w-4" />
               </a>
             </Button>
@@ -90,7 +90,7 @@ export default function Home() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>
                 <a href={ctaHref}>
-                  {isAuthenticated ? "Continue with Rina" : "Start with Rina"}
+                  {isAuthenticated ? "Continue with Rina" : "Let Rina read your site →"}
                   <ArrowRight className="ml-1.5 h-4 w-4" />
                 </a>
               </Button>
@@ -142,7 +142,7 @@ export default function Home() {
       <section className="py-20">
         <div className="container grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <h2 className="font-display text-4xl mb-4">Your weekly visibility briefing</h2>
+            <h2 className="font-display text-4xl mb-4">What Rina tells you when you walk in.</h2>
             <p className="text-muted-foreground mb-6">
               Every week, Rina answers the same five questions in plain language so you always know where your business
               stands in the eyes of AI.
@@ -161,7 +161,7 @@ export default function Home() {
             </ol>
             <Button size="lg" className="mt-8" asChild>
               <a href={ctaHref}>
-                {isAuthenticated ? "Open your weekly meeting" : "Get started"}
+                {isAuthenticated ? "Open your briefing" : "Get started"}
                 <ArrowRight className="ml-1.5 h-4 w-4" />
               </a>
             </Button>

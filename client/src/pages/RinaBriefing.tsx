@@ -1,10 +1,10 @@
 /**
- * WeeklyMeeting — matches the mockup exactly.
+ * RinaBriefing — Rina's always-on visibility brief.
  *
- * Layout (inside the white content area, RinaLayout already provides the
+ * Layout (inside the white content area, RinaLayout provides the
  * lavender background + Rina character on the left outside the card):
  *
- *  ┌─ Header: title + week pill + refresh ──────────────────────────────┐
+ *  ┌─ Header: "What Rina sees right now." + refresh ────────────────────┐
  *  │  "How are we doing with AI visibility this week? ✦"               │
  *  │  subtitle                                                          │
  *  │                                                                    │
@@ -18,7 +18,6 @@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentBusiness } from "@/hooks/useCurrentBusiness";
-import { RINA_HERO_IMAGE } from "@/lib/rina";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowRight,
@@ -41,7 +40,8 @@ import {
   TrendingUp,
   Wrench,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
 import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -103,11 +103,11 @@ const INTERP: Record<string, Record<string, string>> = {
 
 // ─── 5 question card definitions ─────────────────────────────────────────────
 const CARDS = [
-  { num: 1, key: "showing_up",           question: "Are we showing up?",              Icon: Eye,                iconCls: "text-violet-500", iconBg: "bg-violet-50",  link: "/app/scorecard" },
-  { num: 2, key: "being_understood",     question: "Are we being understood?",        Icon: MessageSquareText,  iconCls: "text-pink-500",   iconBg: "bg-pink-50",    link: "/app/scorecard" },
-  { num: 3, key: "trusted",              question: "Are we trusted?",                 Icon: ShieldCheck,        iconCls: "text-violet-500", iconBg: "bg-violet-50",  link: "/app/scorecard" },
-  { num: 4, key: "recommendation_ready", question: "Are we recommendation-ready?",   Icon: Star,               iconCls: "text-amber-400",  iconBg: "bg-amber-50",   link: "/app/scorecard" },
-  { num: 5, key: "fix_priority",         question: "What should we fix next?",        Icon: Wrench,             iconCls: "text-violet-500", iconBg: "bg-violet-50",  link: "/app/fixes" },
+  { num: 1, key: "showing_up",           question: "Are we showing up?",            Icon: Eye,               iconCls: "text-violet-500", iconBg: "bg-violet-50",  link: "/app/fixes" },
+  { num: 2, key: "being_understood",     question: "Are we being understood?",      Icon: MessageSquareText, iconCls: "text-pink-500",   iconBg: "bg-pink-50",    link: "/app/fixes" },
+  { num: 3, key: "trusted",              question: "Are we trusted?",               Icon: ShieldCheck,       iconCls: "text-violet-500", iconBg: "bg-violet-50",  link: "/app/fixes" },
+  { num: 4, key: "recommendation_ready", question: "Are we recommendation-ready?", Icon: Star,              iconCls: "text-amber-400",  iconBg: "bg-amber-50",   link: "/app/fixes" },
+  { num: 5, key: "fix_priority",         question: "What should we fix next?",      Icon: Wrench,            iconCls: "text-violet-500", iconBg: "bg-violet-50",  link: "/app/fixes" },
 ];
 
 // ─── Rina Can Help actions ────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ const PIPELINE = [
 ];
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function WeeklyMeeting() {
+export default function RinaBriefing() {
   const { businessId, current, hasNone, isLoading: bizLoading } = useCurrentBusiness();
   const [, navigate] = useLocation();
 
@@ -142,7 +142,7 @@ export default function WeeklyMeeting() {
 
   // Mutations
   const runScan = trpc.scanner.run.useMutation({
-    onSuccess: () => { snap.refetch(); briefing.refetch(); toast.success("Scan complete — meeting refreshed."); },
+    onSuccess: () => { snap.refetch(); briefing.refetch(); toast.success("Scan complete — brief refreshed."); },
     onError: () => toast.error("Scan failed. Please try again."),
   });
   const genBriefing = trpc.briefing.generate.useMutation({
@@ -152,13 +152,20 @@ export default function WeeklyMeeting() {
 
   const isBusy = runScan.isPending || genBriefing.isPending;
 
-  // Week label
-  const weekLabel = useMemo(() => {
-    const d = snap.data?.weekStartDate ? new Date(snap.data.weekStartDate) : new Date();
-    const end = new Date(d); end.setDate(end.getDate() + 6);
-    const f = (dt: Date) => dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    return `Week of ${f(d)} – ${f(end)}, ${d.getFullYear()}`;
-  }, [snap.data?.weekStartDate]);
+  // ── Ask Rina ─────────────────────────────────────────────────────────────────
+  const [askInput, setAskInput] = useState("");
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const askRina = trpc.rina.ask.useMutation({
+    onSuccess: (data) => setAskAnswer(data.answer),
+    onError: () => toast.error("Rina couldn't answer that right now."),
+  });
+  function handleAsk(e: React.FormEvent) {
+    e.preventDefault();
+    if (!askInput.trim() || !businessId) return;
+    setAskAnswer(null);
+    askRina.mutate({ businessId, question: askInput.trim() });
+    setAskInput("");
+  }
 
   // Pipeline counts
   const pipelineCounts = useMemo(() =>
@@ -202,7 +209,7 @@ export default function WeeklyMeeting() {
         </div>
         <h2 className="font-display text-2xl text-slate-800 mb-2">Let's introduce Rina to your business.</h2>
         <p className="text-slate-500 text-sm max-w-sm mb-6">
-          Before Rina can run your weekly meeting, she needs to understand what you do and who you serve.
+          Before Rina can run your brief, she needs to understand what you do and who you serve.
         </p>
         <Button onClick={() => navigate("/onboarding")} className="bg-violet-600 hover:bg-violet-700 text-white">
           <Sparkles className="mr-2 h-4 w-4" /> Start the interview
@@ -215,22 +222,22 @@ export default function WeeklyMeeting() {
   if (!briefing.data && !briefing.isLoading) {
     return (
       <div className="space-y-6 py-2">
-        <WeekHeader weekLabel={weekLabel} businessName={current?.name} />
+        <RinaHeader businessName={current?.name} />
         <div className="rounded-2xl border border-violet-100 bg-violet-50 p-10 text-center">
           <div className="h-12 w-12 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center mx-auto mb-4">
             <Sparkles className="h-5 w-5" />
           </div>
-          <h3 className="font-display text-xl text-slate-800 mb-2">Your first meeting is almost ready.</h3>
+          <h3 className="font-display text-xl text-slate-800 mb-2">Your first brief is almost ready.</h3>
           <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
             {s && s.openFindings > 0
-              ? `I found ${s.openFindings} signal${s.openFindings !== 1 ? "s" : ""} on your first scan. Let me write your briefing.`
-              : "I need to scan your website before I can write your briefing."}
+              ? `I found ${s.openFindings} signal${s.openFindings !== 1 ? "s" : ""} on your first scan. Let me write your brief.`
+              : "I need to scan your website before I can write your brief."}
           </p>
           <div className="flex gap-3 justify-center">
             {s && s.openFindings > 0 ? (
               <Button onClick={() => genBriefing.mutate({ businessId: current!.id })} disabled={isBusy} className="bg-violet-600 hover:bg-violet-700 text-white">
                 {genBriefing.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Write my briefing
+                Write my brief
               </Button>
             ) : (
               <Button onClick={() => runScan.mutate({ businessId: current!.id })} disabled={isBusy} className="bg-violet-600 hover:bg-violet-700 text-white">
@@ -244,13 +251,12 @@ export default function WeeklyMeeting() {
     );
   }
 
-  // ── Full meeting view ─────────────────────────────────────────────────────────
+  // ── Full brief view ───────────────────────────────────────────────────────────
   return (
     <div className="space-y-5 py-2">
 
       {/* Header */}
-      <WeekHeader
-        weekLabel={weekLabel}
+      <RinaHeader
         businessName={current?.name}
         onRefresh={() => current && runScan.mutate({ businessId: current.id })}
         isBusy={isBusy}
@@ -263,7 +269,7 @@ export default function WeeklyMeeting() {
           <span className="text-amber-400 text-2xl leading-none">✦</span>
         </h2>
         <p className="text-slate-500 text-sm mt-1.5">
-          Your AI visibility snapshot, insights, and actions—so we keep getting better.
+          Rina is always watching. Here is what she found.
         </p>
       </div>
 
@@ -446,24 +452,51 @@ export default function WeeklyMeeting() {
                 <Sparkles className="h-3.5 w-3.5" />
                 View Full Action Plan
                 <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
+                            </Button>
             </Link>
           </div>
         </div>
       </div>
 
+      {/* Ask Rina interaction bar */}
+      <div className="rounded-2xl border border-violet-100 bg-white px-5 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-6 w-6 rounded-lg bg-violet-600 flex items-center justify-center shrink-0">
+            <span className="text-white font-bold text-[10px]">R</span>
+          </div>
+          <span className="text-sm font-semibold text-slate-700">Ask Rina anything about your visibility</span>
+        </div>
+        <form onSubmit={handleAsk} className="flex gap-2">
+          <Input
+            value={askInput}
+            onChange={(e) => setAskInput(e.target.value)}
+            placeholder="e.g. Why isn't my business showing up in AI results?"
+            className="flex-1 h-10 text-sm rounded-xl border-slate-200 focus:border-violet-400"
+            disabled={askRina.isPending}
+          />
+          <Button
+            type="submit"
+            disabled={!askInput.trim() || askRina.isPending || !businessId}
+            className="h-10 px-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl shrink-0"
+          >
+            {askRina.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </form>
+        {askAnswer && (
+          <div className="mt-3 rounded-xl bg-violet-50 border border-violet-100 px-4 py-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            {askAnswer}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
 // ─── Header sub-component ─────────────────────────────────────────────────────
-function WeekHeader({
-  weekLabel,
+function RinaHeader({
   businessName,
   onRefresh,
   isBusy,
 }: {
-  weekLabel: string;
   businessName?: string;
   onRefresh?: () => void;
   isBusy?: boolean;
@@ -472,23 +505,17 @@ function WeekHeader({
     <div className="flex items-start justify-between gap-4">
       <div>
         <h1 className="font-display text-2xl font-bold text-slate-800 leading-tight">
-          Rina's Weekly Visibility Meeting
+          What Rina sees right now.
         </h1>
         {businessName && (
           <div className="text-sm text-slate-500 mt-0.5">{businessName}</div>
         )}
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 font-medium">
-          <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
-          {weekLabel}
-        </div>
-        {onRefresh && (
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-xl" onClick={onRefresh} disabled={isBusy}>
-            {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          </Button>
-        )}
-      </div>
+      {onRefresh && (
+        <Button variant="outline" size="sm" className="h-8 w-8 p-0 rounded-xl shrink-0" onClick={onRefresh} disabled={isBusy}>
+          {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+        </Button>
+      )}
     </div>
   );
 }

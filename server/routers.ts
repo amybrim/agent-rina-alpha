@@ -54,6 +54,8 @@ import {
   markFailed,
 } from "./rina/workflows/approvalWorkflow";
 import { runWeeklyBriefingWorkflow } from "./rina/workflows/briefingWorkflow";
+import { invokeLLM } from "./_core/llm";
+import { RINA_SYSTEM_PROMPT } from "./rina/prompts/systemPrompt";
 
 // ─────────────────────────────────────────────
 // Zod schemas
@@ -586,6 +588,63 @@ export const appRouter = router({
       }),
   }),
 
+  // ── Rina conversational ask ─────────────────────────────────────────────
+  rina: router({
+    ask: protectedProcedure
+      .input(
+        z.object({
+          businessId: z.number().int().positive(),
+          question: z.string().min(1).max(2000),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const biz = await getBusinessForUser(ctx.user.openId);
+        if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
+        const profile = await getFullProfile(input.businessId);
+        const snapshot = await getVisibilitySnapshot(input.businessId);
+        const fixes = await listFixItemsForBusiness(input.businessId, ["recommended", "drafted", "needs_input"]);
+        const context = [
+          `Business: ${profile.business?.name ?? "Unknown"} (${profile.business?.url ?? ""})`,
+          `Industry: ${profile.business?.industry ?? "Unknown"}`,
+          `Audience: ${profile.business?.audience ?? "Unknown"}`,
+          `Overall health grade: ${snapshot?.healthGrade ?? "N/A"}`,
+          `Active fixes: ${fixes.length}`,
+          fixes.length > 0 ? `Top fix: ${fixes[0]?.issue ?? "N/A"} (${fixes[0]?.impactLevel ?? ""})` : "",
+        ].filter(Boolean).join("\n");
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: RINA_SYSTEM_PROMPT },
+            { role: "user", content: `Context about this business:\n${context}\n\nUser question: ${input.question}` },
+          ],
+        });
+        const answer = (response as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content ?? "I'm not sure how to answer that right now.";
+        return { answer };
+      }),
+    firstBrief: protectedProcedure
+      .input(
+        z.object({
+          businessId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const biz = await getBusinessForUser(ctx.user.openId);
+        if (!biz || biz.id !== input.businessId) throw new TRPCError({ code: "NOT_FOUND" });
+        const profile = await getFullProfile(input.businessId);
+        const fixes = await listFixItemsForBusiness(input.businessId, ["recommended", "found"]);
+        const topFindings = fixes.slice(0, 5).map((f) => `- ${f.issue} (${f.impactLevel} impact)`).join("\n");
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: RINA_SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: `I just scanned ${profile.business?.url ?? "this website"} for the first time. The business name appears to be "${profile.business?.name ?? "Unknown"}".\n\nHere are the top findings from the scan:\n${topFindings || "No findings yet — scan may still be running."}\n\nWrite Rina's first brief to the business owner. Start with: "I found ${profile.business?.name ?? "your business"}. Here's what I know about you right now." Then give 3-5 findings in plain language with confidence labels. Be warm, direct, and specific. Keep it under 200 words.`,
+            },
+          ],
+        });
+        const brief = (response as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content ?? "I scanned your site and found some things to work on. Let me show you the most important fix first.";
+        return { brief, businessName: profile.business?.name ?? "Your business", topFix: fixes[0] ?? null };
+      }),
+  }),
   // ── Weekly briefing workflow ───────────────────────────────────────────
   weeklyMeeting: router({
     run: protectedProcedure

@@ -1,526 +1,401 @@
 /**
- * Onboarding — 5-step interview
- * Step 1: Business basics (name, URL, category, location)
- * Step 2: Offers and audiences
- * Step 3: Proof and trust signals
- * Step 4: Brand voice and goals
- * Step 5: Confirmation — Rina summarises, user confirms, first scan triggers
+ * Onboarding — URL-first 4-screen flow
+ *
+ * Screen 1: One URL field. "Give me your website URL and I'll take it from there."
+ * Screen 2: Rina is working. Loading messages in sequence.
+ * Screen 3: Rina's first brief. LLM-generated from real scan data.
+ * Screen 4: First fix offered immediately.
  */
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { cn } from "@/lib/utils";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Building2,
-  CheckCircle2,
-  Loader2,
-  Mic2,
-  Shield,
-  Sparkles,
-  Target,
-} from "lucide-react";
-import { useState } from "react";
+import { RINA_HERO_IMAGE } from "@/lib/rina";
+import { ArrowRight, CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface FormState {
-  // Step 1
-  name: string;
-  url: string;
-  industry: string;
-  location: string;
-  // Step 2
-  primaryServices: string;
-  targetAudience: string;
-  problemSolved: string;
-  // Step 3
-  reviewPlatforms: string;
-  proofSignals: string;
-  yearsInBusiness: string;
-  // Step 4
-  brandVoice: string;
-  goals: string;
-  knownCompetitors: string;
-}
-
-const EMPTY: FormState = {
-  name: "",
-  url: "",
-  industry: "",
-  location: "",
-  primaryServices: "",
-  targetAudience: "",
-  problemSolved: "",
-  reviewPlatforms: "",
-  proofSignals: "",
-  yearsInBusiness: "",
-  brandVoice: "",
-  goals: "",
-  knownCompetitors: "",
-};
-
-const STEPS = [
-  { icon: Building2, label: "Your business" },
-  { icon: Target, label: "Offers & audience" },
-  { icon: Shield, label: "Proof & trust" },
-  { icon: Mic2, label: "Voice & goals" },
-  { icon: CheckCircle2, label: "Confirm" },
+// ─── Loading messages ─────────────────────────────────────────────────────────
+const LOADING_MESSAGES = [
+  "Reading your homepage...",
+  "Checking what AI crawlers can find...",
+  "Looking for your proof signals...",
+  "Checking your schema and metadata...",
+  "Almost ready...",
 ];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Screen = "url" | "loading" | "brief" | "fix";
+
+interface ScanState {
+  businessId: number;
+  businessName: string;
+  brief: string;
+  topFix: {
+    id: number;
+    issue: string;
+    recommendation: string;
+    impactLevel: string;
+  } | null;
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function Onboarding() {
   const { user } = useAuth({ redirectOnUnauthenticated: true });
   const [, navigate] = useLocation();
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState<FormState>(EMPTY);
-  const [scanning, setScanning] = useState(false);
+  const [screen, setScreen] = useState<Screen>("url");
+  const [url, setUrl] = useState("");
+  const [urlError, setUrlError] = useState("");
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+  const [scanState, setScanState] = useState<ScanState | null>(null);
+  const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const utils = trpc.useUtils();
+  // tRPC mutations
+  const createBusiness = trpc.business.create.useMutation();
+  const runScan = trpc.scanner.run.useMutation();
+  const firstBrief = trpc.rina.firstBrief.useMutation();
 
-  const createBusiness = trpc.business.create.useMutation({
-    onError: (e) => toast.error(e.message),
-  });
+  // Cycle loading messages
+  useEffect(() => {
+    if (screen === "loading") {
+      setLoadingMsgIdx(0);
+      loadingIntervalRef.current = setInterval(() => {
+        setLoadingMsgIdx((i) => Math.min(i + 1, LOADING_MESSAGES.length - 1));
+      }, 1800);
+    } else {
+      if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
+    }
+    return () => {
+      if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
+    };
+  }, [screen]);
 
-  const runScan = trpc.scanner.run.useMutation({
-    onError: (e) => toast.error("Scan failed: " + e.message),
-  });
+  // ── Submit URL ──────────────────────────────────────────────────────────────
+  async function handleUrlSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setUrlError("");
 
-  const firstName = user?.name?.split(" ")[0] ?? "there";
+    let normalized = url.trim();
+    if (!normalized) { setUrlError("Please enter your website URL."); return; }
+    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+      normalized = "https://" + normalized;
+    }
+    try { new URL(normalized); } catch {
+      setUrlError("That doesn't look like a valid URL. Try https://yoursite.com");
+      return;
+    }
 
-  function set(key: keyof FormState, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+    setScreen("loading");
 
-  function canAdvance(): boolean {
-    if (step === 0) return form.name.trim().length > 0 && form.url.trim().length > 0;
-    if (step === 1) return form.primaryServices.trim().length > 0;
-    return true;
-  }
-
-  async function handleConfirm() {
-    setScanning(true);
     try {
-      let url = form.url.trim();
-      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+      // Extract a placeholder name from the domain
+      const domain = new URL(normalized).hostname.replace(/^www\./, "");
+      const placeholderName = domain.split(".")[0]
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
 
-      // Build audience string from interview answers
-      const audience = [form.targetAudience, form.problemSolved]
-        .filter(Boolean)
-        .join(" — ");
-
+      // Step 1: Create business
       const biz = await createBusiness.mutateAsync({
-        name: form.name.trim(),
-        url,
-        industry: form.industry.trim() || undefined,
-        businessType: form.location.trim() || undefined,
-        audience: audience || undefined,
-        brandVoice: form.brandVoice.trim() || undefined,
-        goals: form.goals.trim() || undefined,
+        name: placeholderName,
+        url: normalized,
       });
 
-      // Trigger first scan — non-blocking
-      runScan.mutate({ businessId: biz.id });
+      // Step 2: Run scan (fire and forget — we'll poll for results)
+      await runScan.mutateAsync({ businessId: biz.id });
 
-      await utils.business.list.invalidate();
-      localStorage.setItem("rina.currentBusinessId", String(biz.id));
-      navigate("/app");
-    } catch {
-      setScanning(false);
+      // Step 3: Generate first brief from scan data
+      const briefResult = await firstBrief.mutateAsync({ businessId: biz.id });
+
+      setScanState({
+        businessId: biz.id,
+        businessName: briefResult.businessName,
+        brief: briefResult.brief,
+        topFix: briefResult.topFix as ScanState["topFix"],
+      });
+
+      setScreen("brief");
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      toast.error(message);
+      setScreen("url");
     }
   }
 
-  // ─── Step renderers ──────────────────────────────────────────────────────
-  function renderStep() {
-    switch (step) {
-      case 0:
-        return (
-          <div className="space-y-5">
-            <Heading
-              title={`Hi ${firstName} — let's start with the basics.`}
-              sub="I need to understand your business before I can scan it."
-            />
-            <Field label="Business name *">
-              <Input
-                placeholder="e.g. Sunbeam Services"
-                value={form.name}
-                onChange={(e) => set("name", e.target.value)}
-                autoFocus
-              />
-            </Field>
-            <Field label="Website URL *">
-              <Input
-                placeholder="e.g. sunbeamservices.com"
-                value={form.url}
-                onChange={(e) => set("url", e.target.value)}
-              />
-            </Field>
-            <Field label="Industry or category">
-              <Input
-                placeholder="e.g. Home services, Legal, Healthcare"
-                value={form.industry}
-                onChange={(e) => set("industry", e.target.value)}
-              />
-            </Field>
-            <Field label="Primary service area or location">
-              <Input
-                placeholder="e.g. Austin, TX or Greater Boston Area"
-                value={form.location}
-                onChange={(e) => set("location", e.target.value)}
-              />
-            </Field>
-          </div>
-        );
-
-      case 1:
-        return (
-          <div className="space-y-5">
-            <Heading
-              title="What do you do, and for whom?"
-              sub="This is what I'll use to assess whether AI systems describe you accurately."
-            />
-            <Field label="What are your primary services or products? *">
-              <Textarea
-                placeholder="e.g. Residential and commercial HVAC installation, repair, and maintenance"
-                rows={3}
-                value={form.primaryServices}
-                onChange={(e) => set("primaryServices", e.target.value)}
-              />
-            </Field>
-            <Field label="Who do you most want to reach?">
-              <Textarea
-                placeholder="e.g. Homeowners in Austin who need same-day HVAC repair"
-                rows={2}
-                value={form.targetAudience}
-                onChange={(e) => set("targetAudience", e.target.value)}
-              />
-            </Field>
-            <Field label="What problem do you solve for them?">
-              <Textarea
-                placeholder="e.g. We get their system running again the same day, with upfront pricing and no surprises"
-                rows={2}
-                value={form.problemSolved}
-                onChange={(e) => set("problemSolved", e.target.value)}
-              />
-            </Field>
-          </div>
-        );
-
-      case 2:
-        return (
-          <div className="space-y-5">
-            <Heading
-              title="Help me understand your credibility."
-              sub="Proof signals are one of the strongest factors in AI recommendation readiness."
-            />
-            <Field label="Where are your reviews?">
-              <Input
-                placeholder="e.g. Google (4.8★, 312 reviews), Yelp, Houzz"
-                value={form.reviewPlatforms}
-                onChange={(e) => set("reviewPlatforms", e.target.value)}
-              />
-            </Field>
-            <Field label="Any press, awards, credentials, or case studies?">
-              <Textarea
-                placeholder="e.g. BBB Accredited, NATE Certified, featured in Austin Business Journal"
-                rows={3}
-                value={form.proofSignals}
-                onChange={(e) => set("proofSignals", e.target.value)}
-              />
-            </Field>
-            <Field label="How long have you been in business?">
-              <Input
-                type="number"
-                placeholder="Years"
-                min={0}
-                max={200}
-                value={form.yearsInBusiness}
-                onChange={(e) => set("yearsInBusiness", e.target.value)}
-                className="max-w-[120px]"
-              />
-            </Field>
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-5">
-            <Heading
-              title="How do you want to sound?"
-              sub="I'll use this to match your voice when I draft content for your approval."
-            />
-            <Field label="How would you describe your tone?">
-              <Input
-                placeholder="e.g. Warm and direct — we're local, not corporate"
-                value={form.brandVoice}
-                onChange={(e) => set("brandVoice", e.target.value)}
-              />
-            </Field>
-            <Field label="What is your biggest visibility goal right now?">
-              <Textarea
-                placeholder="e.g. Show up when someone in Austin asks ChatGPT for HVAC repair"
-                rows={2}
-                value={form.goals}
-                onChange={(e) => set("goals", e.target.value)}
-              />
-            </Field>
-            <Field label="Any competitors you are aware of?">
-              <Input
-                placeholder="e.g. CoolBreeze HVAC, Austin Air Pros"
-                value={form.knownCompetitors}
-                onChange={(e) => set("knownCompetitors", e.target.value)}
-              />
-            </Field>
-          </div>
-        );
-
-      case 4:
-        return (
-          <div className="space-y-5">
-            <Heading
-              title="Here is what I understand about your business."
-              sub="Before I scan, confirm this is correct. You can edit any field."
-            />
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 divide-y divide-slate-200 text-sm">
-              <SummaryRow label="Business" value={form.name} onEdit={() => setStep(0)} />
-              <SummaryRow label="Website" value={form.url} onEdit={() => setStep(0)} />
-              {form.industry && (
-                <SummaryRow label="Industry" value={form.industry} onEdit={() => setStep(0)} />
-              )}
-              {form.location && (
-                <SummaryRow label="Location" value={form.location} onEdit={() => setStep(0)} />
-              )}
-              <SummaryRow
-                label="Primary services"
-                value={form.primaryServices}
-                onEdit={() => setStep(1)}
-              />
-              {form.targetAudience && (
-                <SummaryRow
-                  label="Target audience"
-                  value={form.targetAudience}
-                  onEdit={() => setStep(1)}
-                />
-              )}
-              {form.problemSolved && (
-                <SummaryRow
-                  label="Problem solved"
-                  value={form.problemSolved}
-                  onEdit={() => setStep(1)}
-                />
-              )}
-              {form.reviewPlatforms && (
-                <SummaryRow
-                  label="Reviews"
-                  value={form.reviewPlatforms}
-                  onEdit={() => setStep(2)}
-                />
-              )}
-              {form.proofSignals && (
-                <SummaryRow
-                  label="Proof signals"
-                  value={form.proofSignals}
-                  onEdit={() => setStep(2)}
-                />
-              )}
-              {form.yearsInBusiness && (
-                <SummaryRow
-                  label="Years in business"
-                  value={`${form.yearsInBusiness} years`}
-                  onEdit={() => setStep(2)}
-                />
-              )}
-              {form.brandVoice && (
-                <SummaryRow
-                  label="Tone"
-                  value={form.brandVoice}
-                  onEdit={() => setStep(3)}
-                />
-              )}
-              {form.goals && (
-                <SummaryRow
-                  label="Visibility goal"
-                  value={form.goals}
-                  onEdit={() => setStep(3)}
-                />
-              )}
-            </div>
-            <p className="text-sm text-slate-500">
-              Once you confirm, I'll run my first scan of{" "}
-              <span className="font-medium text-slate-700">{form.url || "your website"}</span>.
-              This takes about 30 seconds. Your Weekly Meeting will be ready when it's done.
-            </p>
-          </div>
-        );
-
-      default:
-        return null;
+  // ── Proceed to first fix ────────────────────────────────────────────────────
+  function handleShowFix() {
+    if (scanState?.topFix) {
+      setScreen("fix");
+    } else {
+      // No fix available — go straight to app
+      finishOnboarding();
     }
   }
 
-  // ─── Layout ──────────────────────────────────────────────────────────────
+  // ── Finish onboarding ───────────────────────────────────────────────────────
+  async function finishOnboarding() {
+    if (scanState?.businessId) {
+      try {
+        await trpc.business.completeOnboarding.useMutation();
+      } catch { /* ignore */ }
+    }
+    navigate("/app");
+  }
+
+  if (!user) return null;
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{
-        background: "linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)",
-      }}
-    >
-      <div className="w-full max-w-lg">
-        {/* Progress */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            {STEPS.map((s, i) => {
-              const Icon = s.icon;
-              const done = i < step;
-              const active = i === step;
-              return (
-                <button
-                  key={i}
-                  onClick={() => i < step && setStep(i)}
-                  disabled={i >= step}
-                  className={cn(
-                    "flex flex-col items-center gap-1 transition-opacity",
-                    i > step && "opacity-30",
-                    i < step && "cursor-pointer"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "h-9 w-9 rounded-full flex items-center justify-center transition-all",
-                      done
-                        ? "bg-violet-600 text-white shadow-md"
-                        : active
-                        ? "bg-white border-2 border-violet-600 text-violet-600 shadow-md"
-                        : "bg-white/60 border border-slate-200 text-slate-400"
-                    )}
-                  >
-                    {done ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <Icon className="h-4 w-4" />
-                    )}
+    <div className="min-h-screen bg-[#EEEAF6] flex items-center justify-center p-4">
+      {/* Screen 1: URL input */}
+      {screen === "url" && (
+        <div className="w-full max-w-2xl">
+          <div className="flex items-start gap-8">
+            {/* Rina illustration */}
+            <div className="hidden md:block flex-shrink-0 w-48">
+              <img
+                src={RINA_HERO_IMAGE}
+                alt="Rina"
+                className="w-full object-contain drop-shadow-lg"
+              />
+            </div>
+
+            {/* Card */}
+            <div className="flex-1 bg-white rounded-2xl shadow-lg p-8">
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">R</span>
                   </div>
-                  <span
-                    className={cn(
-                      "text-[10px] font-medium hidden sm:block",
-                      active ? "text-violet-700" : "text-slate-400"
-                    )}
-                  >
-                    {s.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="h-1 bg-white/50 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-violet-600 rounded-full transition-all duration-500"
-              style={{ width: `${(step / (STEPS.length - 1)) * 100}%` }}
-            />
-          </div>
-        </div>
+                  <span className="text-sm font-medium text-violet-600">Insightfulrina</span>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 leading-snug">
+                  Give me your website URL<br />
+                  <span className="text-violet-600">and I'll take it from there.</span>
+                </h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  I'll read your site, check what AI systems can find, and tell you exactly where you stand.
+                </p>
+              </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center text-white font-display text-base shadow">
-              R
+              <form onSubmit={handleUrlSubmit} className="space-y-4">
+                <div>
+                  <Input
+                    type="text"
+                    placeholder="https://yoursite.com"
+                    value={url}
+                    onChange={(e) => { setUrl(e.target.value); setUrlError(""); }}
+                    className="h-12 text-base rounded-xl border-slate-200 focus:border-violet-400 focus:ring-violet-400"
+                    autoFocus
+                  />
+                  {urlError && (
+                    <p className="mt-1.5 text-sm text-rose-600">{urlError}</p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-base font-semibold"
+                  disabled={createBusiness.isPending || runScan.isPending}
+                >
+                  Let Rina in <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
+
+              <p className="mt-4 text-xs text-slate-400 text-center">
+                No credit card. No setup. Rina reads your site and tells you what she finds.
+              </p>
             </div>
-            <span className="text-sm font-medium text-slate-500">Agent Rina</span>
-          </div>
-
-          {renderStep()}
-
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-100">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setStep((s) => s - 1)}
-              disabled={step === 0}
-              className="text-slate-500"
-            >
-              <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
-            </Button>
-
-            {step < 4 ? (
-              <Button
-                onClick={() => setStep((s) => s + 1)}
-                disabled={!canAdvance()}
-                className="bg-violet-600 hover:bg-violet-700 text-white"
-              >
-                Continue <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleConfirm}
-                disabled={scanning || createBusiness.isPending}
-                className="bg-violet-600 hover:bg-violet-700 text-white min-w-[160px]"
-              >
-                {scanning || createBusiness.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Starting scan…
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Confirm &amp; scan
-                  </>
-                )}
-              </Button>
-            )}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      )}
 
-function Heading({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="space-y-1">
-      <h2 className="font-display text-2xl text-slate-800 leading-tight">{title}</h2>
-      <p className="text-sm text-slate-500">{sub}</p>
-    </div>
-  );
-}
+      {/* Screen 2: Loading */}
+      {screen === "loading" && (
+        <div className="w-full max-w-lg text-center">
+          <div className="flex flex-col items-center gap-6">
+            {/* Rina illustration */}
+            <img
+              src={RINA_HERO_IMAGE}
+              alt="Rina working"
+              className="w-40 object-contain drop-shadow-lg"
+            />
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-medium text-slate-700">{label}</Label>
-      {children}
-    </div>
-  );
-}
+            <div className="bg-white rounded-2xl shadow-lg px-8 py-6 w-full">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <Loader2 className="h-5 w-5 text-violet-600 animate-spin" />
+                <span className="font-semibold text-slate-800">Rina is reading your site</span>
+              </div>
 
-function SummaryRow({
-  label,
-  value,
-  onEdit,
-}: {
-  label: string;
-  value: string;
-  onEdit: () => void;
-}) {
-  return (
-    <div className="flex items-start gap-3 px-4 py-3">
-      <span className="text-slate-400 w-32 shrink-0 text-xs font-medium uppercase tracking-wide pt-0.5">
-        {label}
-      </span>
-      <span className="flex-1 text-slate-700 text-sm leading-relaxed">{value}</span>
-      <button
-        onClick={onEdit}
-        className="text-violet-600 text-xs font-medium hover:underline shrink-0"
-      >
-        Edit
-      </button>
+              {/* Message sequence */}
+              <div className="space-y-2">
+                {LOADING_MESSAGES.map((msg, i) => (
+                  <div
+                    key={msg}
+                    className={`flex items-center gap-2 text-sm transition-all duration-500 ${
+                      i < loadingMsgIdx
+                        ? "text-emerald-600"
+                        : i === loadingMsgIdx
+                        ? "text-violet-700 font-medium"
+                        : "text-slate-300"
+                    }`}
+                  >
+                    {i < loadingMsgIdx ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                    ) : i === loadingMsgIdx ? (
+                      <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin" />
+                    ) : (
+                      <div className="h-3.5 w-3.5 rounded-full border border-slate-200 flex-shrink-0" />
+                    )}
+                    {msg}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Screen 3: Rina's first brief */}
+      {screen === "brief" && scanState && (
+        <div className="w-full max-w-3xl">
+          <div className="flex items-start gap-6">
+            {/* Rina illustration */}
+            <div className="hidden md:block flex-shrink-0 w-44">
+              <img
+                src={RINA_HERO_IMAGE}
+                alt="Rina"
+                className="w-full object-contain drop-shadow-lg"
+              />
+            </div>
+
+            {/* Brief card */}
+            <div className="flex-1 bg-white rounded-2xl shadow-lg p-8">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
+                  <span className="text-white font-bold text-xs">R</span>
+                </div>
+                <span className="text-sm font-medium text-violet-600">Rina's first read</span>
+              </div>
+
+              {/* Brief text — Rina's voice */}
+              <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap mb-6">
+                {scanState.brief}
+              </div>
+
+              {/* Correction section */}
+              <details className="mb-6 border border-slate-100 rounded-xl">
+                <summary className="px-4 py-3 text-sm font-medium text-slate-600 cursor-pointer hover:text-slate-800 select-none">
+                  Correct anything I got wrong
+                </summary>
+                <div className="px-4 pb-4 pt-2 space-y-3">
+                  <p className="text-xs text-slate-400 mb-2">
+                    I inferred these from your site. Update anything that's off.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1">Business name</label>
+                      <Input
+                        defaultValue={scanState.businessName}
+                        className="h-8 text-sm rounded-lg"
+                        onChange={(e) => setScanState((s) => s ? { ...s, businessName: e.target.value } : s)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1">Industry</label>
+                      <Input placeholder="e.g. Professional Services" className="h-8 text-sm rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1">Primary audience</label>
+                      <Input placeholder="e.g. Small business owners" className="h-8 text-sm rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 block mb-1">Location / service area</label>
+                      <Input placeholder="e.g. Chicago, IL" className="h-8 text-sm rounded-lg" />
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <Button
+                onClick={handleShowFix}
+                className="w-full h-11 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold"
+              >
+                This looks right — show me what to fix first
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Screen 4: First fix */}
+      {screen === "fix" && scanState?.topFix && (
+        <div className="w-full max-w-2xl">
+          <div className="flex items-start gap-6">
+            {/* Rina illustration */}
+            <div className="hidden md:block flex-shrink-0 w-40">
+              <img
+                src={RINA_HERO_IMAGE}
+                alt="Rina"
+                className="w-full object-contain drop-shadow-lg"
+              />
+            </div>
+
+            {/* Fix card */}
+            <div className="flex-1 bg-white rounded-2xl shadow-lg p-8">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
+                  <span className="text-white font-bold text-xs">R</span>
+                </div>
+                <span className="text-sm font-medium text-violet-600">Most important fix right now</span>
+              </div>
+
+              <p className="text-sm text-slate-500 mb-4">
+                Here is the most important thing to fix right now. I drafted it for you. Your approval takes 30 seconds.
+              </p>
+
+              {/* Fix preview */}
+              <div className="border border-slate-100 rounded-xl p-4 mb-6 bg-slate-50">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="font-semibold text-slate-900 text-sm leading-snug">
+                    {scanState.topFix.issue}
+                  </h3>
+                  <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+                    scanState.topFix.impactLevel === "high"
+                      ? "bg-rose-50 text-rose-700"
+                      : scanState.topFix.impactLevel === "medium"
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {scanState.topFix.impactLevel} impact
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {scanState.topFix.recommendation}
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={finishOnboarding}
+                  className="flex-1 h-11 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold"
+                >
+                  Approve this fix <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={finishOnboarding}
+                  className="h-11 px-4 rounded-xl text-slate-600 border-slate-200"
+                >
+                  Do this later
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

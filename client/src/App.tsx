@@ -8,11 +8,9 @@ import RinaLayout from "./components/RinaLayout";
 import Home from "./pages/Home";
 import Pricing from "./pages/Pricing";
 import Onboarding from "./pages/Onboarding";
-import WeeklyMeeting from "./pages/WeeklyMeeting";
-import Scorecard from "./pages/Scorecard";
+import RinaBriefing from "./pages/RinaBriefing";
 import FixQueue from "./pages/FixQueue";
 import FixWorkspace from "./pages/FixWorkspace";
-import Briefing from "./pages/Briefing";
 import BusinessProfile from "./pages/BusinessProfile";
 import Settings from "./pages/Settings";
 import Integrations from "./pages/Integrations";
@@ -37,14 +35,7 @@ function Router() {
       <Route path="/app">
         {() => (
           <AppShell>
-            <WeeklyMeeting />
-          </AppShell>
-        )}
-      </Route>
-      <Route path="/app/scorecard">
-        {() => (
-          <AppShell>
-            <Scorecard />
+            <RinaBriefing />
           </AppShell>
         )}
       </Route>
@@ -56,16 +47,9 @@ function Router() {
         )}
       </Route>
       <Route path="/app/fixes/:id">
-        {(params) => (
-          <AppShell>
-            <FixWorkspace />
-          </AppShell>
-        )}
-      </Route>
-      <Route path="/app/briefing">
         {() => (
           <AppShell>
-            <Briefing />
+            <FixWorkspace />
           </AppShell>
         )}
       </Route>
