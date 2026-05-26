@@ -279,12 +279,13 @@ export default function WeeklyMeeting() {
             This week's actions
           </div>
           <div className="space-y-2">
-            {(b.topActions as Array<{ fixId: number; action: string; why: string }>).map(
+            {(b.topActions as Array<{ fixId: number | null; action: string; why: string }>).map(
               (a, i) => (
                 <button
                   key={i}
-                  onClick={() => navigate(`/app/fixes/${a.fixId}`)}
-                  className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-left hover:border-violet-200 hover:bg-violet-50/50 transition-colors group"
+                  onClick={() => a.fixId != null && navigate(`/app/fixes/${a.fixId}`)}
+                  disabled={a.fixId == null}
+                  className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-left hover:border-violet-200 hover:bg-violet-50/50 transition-colors group disabled:opacity-60 disabled:cursor-default"
                 >
                   <div className="h-7 w-7 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
                     {i + 1}

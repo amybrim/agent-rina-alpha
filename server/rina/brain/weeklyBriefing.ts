@@ -74,10 +74,11 @@ export async function generateWeeklyBriefing(businessId: number): Promise<Briefi
               items: {
                 type: "object",
                 properties: {
+                  fixItemIndex: { type: "number", description: "0-based index into the provided fix_items list" },
                   action: { type: "string" },
                   why: { type: "string" },
                 },
-                required: ["action", "why"],
+                required: ["fixItemIndex", "action", "why"],
                 additionalProperties: false,
               },
             },
@@ -115,6 +116,21 @@ export async function generateWeeklyBriefing(businessId: number): Promise<Briefi
     ["drafted", "ready_for_review", "approved", "scheduled"].includes(f.status)
   ).length;
 
+  // Resolve fixItemIndex → real fixId.
+  // The prompt passes only the recommended fix items (status==='recommended') with 0-based indices.
+  // We must index into the same filtered list to get the correct DB id.
+  const recommendedFixItems = activeFixItems.filter((f) => f.status === "recommended");
+  const resolvedTopActions = (raw.topActions ?? []).map(
+    (a: { fixItemIndex: number; action: string; why: string }) => {
+      const fixItem = recommendedFixItems[a.fixItemIndex];
+      return {
+        fixId: fixItem?.id ?? null,
+        action: a.action,
+        why: a.why,
+      };
+    }
+  );
+
   // Save briefing
   const [result] = await db
     .insert(visibilityBriefings)
@@ -130,7 +146,7 @@ export async function generateWeeklyBriefing(businessId: number): Promise<Briefi
       rinaRead: raw.rinaRead ?? null,
       fixesCompleted: completedFixes,
       fixesInProgress: inProgressFixes,
-      topActions: raw.topActions ?? [],
+      topActions: resolvedTopActions,
     })
     .$returningId();
 

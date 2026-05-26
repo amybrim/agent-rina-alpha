@@ -53,12 +53,11 @@ function HealthCard() {
       <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
         AI Visibility Health
       </div>
-      <div className="mt-1 flex items-baseline gap-1">
-        <span className="font-display text-3xl text-slate-800 leading-none">
-          {grade ?? "—"}
+      <div className="mt-1">
+        <span className="font-display text-2xl text-slate-800 leading-none">
+          {status}
         </span>
       </div>
-      <div className="text-xs text-slate-500 mt-0.5">{status}</div>
       {data?.rinaRead && (
         <div className="text-[10px] text-slate-400 mt-1 line-clamp-2">{data.rinaRead}</div>
       )}

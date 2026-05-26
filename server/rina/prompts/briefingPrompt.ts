@@ -23,13 +23,21 @@ export function buildBriefingPrompt(
     .map((f) => `- ${f.issue} (${f.status})`)
     .join("\n");
 
+  // Provide recommended fix items with 0-based indices so the LLM can reference them by fixItemIndex.
+  // The index maps directly to the position in the full activeFixItems array passed to generateWeeklyBriefing.
+  const recommendedFixItems = activeFixItems.filter((f) => f.status === "recommended");
+  const recommendedFixList = recommendedFixItems
+    .slice(0, 10)
+    .map((f, i) => `[${i}] ${f.issue}`)
+    .join("\n");
+
   return `${RINA_SYSTEM_PROMPT}
 
 Generate a weekly visibility briefing for ${business.name}.
 
 Business: ${business.name}
 Industry: ${business.industry ?? "not specified"}
-Offers: ${Array.isArray(business.offers) ? business.offers.map((o) => o.name).join(", ") : "not specified"}
+Offers: ${Array.isArray(business.offers) ? business.offers.map((o: { name: string }) => o.name).join(", ") : "not specified"}
 Audience: ${business.audience ?? "not specified"}
 
 Open critical/high findings:
@@ -37,6 +45,9 @@ ${topFindings || "None"}
 
 Fixes currently in progress:
 ${inProgress || "None"}
+
+Recommended fix items (use these indices in topActions.fixItemIndex):
+${recommendedFixList || "None"}
 
 Answer these five questions for this business specifically:
 1. Are we showing up? (grade: clear | partial | not_yet_visible, then one sentence of evidence)
@@ -47,6 +58,9 @@ Answer these five questions for this business specifically:
 
 Then write Rina's Read: 3–5 sentences in Rina's voice summarizing the week.
 
+For topActions, select up to 3 of the most important recommended fixes from the list above.
+Each topAction must include the fixItemIndex (0-based index from the list above), a short action description, and why it matters.
+
 Return JSON:
 {
   "showingUpGrade": "clear|partial|not_yet_visible",
@@ -56,7 +70,7 @@ Return JSON:
   "geoReadinessGrade": "clear|partial|not_yet_visible",
   "rinaRead": "...",
   "topActions": [
-    { "action": "...", "why": "..." }
+    { "fixItemIndex": 0, "action": "...", "why": "..." }
   ]
 }`;
 }
