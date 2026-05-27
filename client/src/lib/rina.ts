@@ -3,8 +3,8 @@
 // ─────────────────────────────────────────────
 
 // Rina character images — served from Manus storage
-export const RINA_HERO_IMAGE = "/manus-storage/Insightfulrinalogo(300x300px)(1)_946bced1.png";
-export const RINA_AVATAR_IMAGE = "/manus-storage/Insightfulrinalogo(300x300px)(1)_946bced1.png";
+export const RINA_HERO_IMAGE = "/manus-storage/rina_logo_transparent_15d8452a.png";
+export const RINA_AVATAR_IMAGE = "/manus-storage/rina_logo_transparent_15d8452a.png";
 
 // ─────────────────────────────────────────────
 // Fix status display helpers
