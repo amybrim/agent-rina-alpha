@@ -254,8 +254,8 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
 
           {/* Rina face avatar row */}
           <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full overflow-hidden border-2 border-violet-200 shrink-0 bg-violet-50">
-              <img src={RINA_AVATAR_IMAGE} alt="Rina" className="h-full w-full object-cover" />
+            <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-violet-200 shrink-0 bg-violet-50 flex items-center justify-center">
+              <img src={RINA_AVATAR_IMAGE} alt="Rina" className="h-full w-full object-contain" />
             </div>
             <div>
               <div className="text-xs font-semibold text-slate-700">Agent Rina</div>
