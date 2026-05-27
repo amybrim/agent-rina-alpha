@@ -66,12 +66,12 @@ export default function Home() {
       <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)' }}>
         <div className="container relative flex flex-col lg:flex-row items-center gap-0 py-16 lg:py-24">
           {/* Rina character — full height, standing beside the copy */}
-          <div className="hidden lg:flex flex-col justify-end items-center shrink-0 w-[320px] self-end">
+          <div className="hidden lg:flex flex-col justify-end items-center shrink-0 w-[420px] self-end">
             <img
               src={RINA_HERO_IMAGE}
               alt="Rina"
-              className="object-contain drop-shadow-[0_30px_40px_rgba(100,60,200,0.22)]"
-              style={{ width: '100%', height: 'auto', minHeight: '400px', maxWidth: '320px', marginBottom: '-4px' }}
+              className="object-contain drop-shadow-[0_40px_60px_rgba(100,60,200,0.28)]"
+              style={{ width: '100%', height: 'auto', minHeight: '520px', maxWidth: '420px', marginBottom: '-4px' }}
             />
           </div>
           {/* Copy */}
@@ -84,8 +84,7 @@ export default function Home() {
               Your AI visibility partner.
             </h1>
             <p className="mt-6 text-lg text-slate-600 max-w-xl">
-              Rina works alongside you each week to make sure AI search engines can find you, understand you, and
-              recommend you. She finds the gaps, drafts the fixes, and waits for your approval before anything ships.
+              Rina is always watching what AI systems know about your business. She tells you what she finds and helps you fix it.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button size="lg" className="bg-violet-600 hover:bg-violet-700 text-white" asChild>

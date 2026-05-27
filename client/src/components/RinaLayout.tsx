@@ -195,14 +195,14 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
               <span className="text-violet-600">Your AI visibility partner.</span>
             </h2>
             <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-              Human-led intelligence. AI as signal interpreter. Rina works alongside you each week to keep your business visible, understood, and recommendable.
+              Rina is always watching what AI systems know about your business. She tells you what she finds and helps you fix it.
             </p>
             <Button
               size="lg"
               className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold"
               onClick={() => (window.location.href = getLoginUrl(location))}
             >
-              <Sparkles className="mr-2 h-4 w-4" /> Start with Rina
+              <Sparkles className="mr-2 h-4 w-4" /> Let Rina read your site →
             </Button>
             <div className="mt-6 flex items-center justify-center gap-4 text-[11px] text-slate-400">
               <span>Subscription-based</span>
