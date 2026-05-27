@@ -66,7 +66,7 @@ export default function Home() {
       <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)' }}>
         <div className="container relative flex flex-col lg:flex-row items-center gap-0 py-16 lg:py-24">
           {/* Rina character — full height, standing beside the copy */}
-          <div className="hidden lg:flex flex-col justify-end items-center shrink-0 self-end" style={{ width: '420px' }}>
+          <div className="hidden lg:flex flex-col justify-end items-center shrink-0 self-end rina-entrance" style={{ width: '420px' }}>
             <img
               src={RINA_HERO_IMAGE}
               alt="Rina"

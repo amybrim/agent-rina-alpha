@@ -160,3 +160,25 @@
     color: transparent;
   }
 }
+
+/* ── Rina entrance animation ─────────────────────────────── */
+@keyframes rina-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rina-entrance {
+  animation: rina-entrance 0.7s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rina-entrance {
+    animation: none;
+  }
+}
