@@ -171,14 +171,14 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-2xl w-full flex">
           {/* Left: illustrated Rina standing full height */}
           <div
-            className="hidden sm:flex w-56 shrink-0 items-end justify-center relative overflow-hidden"
-            style={{ background: "linear-gradient(160deg, #ede9f8 0%, #dde8f8 100%)" }}
+            className="hidden sm:flex w-64 shrink-0 items-end justify-center relative overflow-hidden"
+            style={{ background: "linear-gradient(160deg, #ede9f8 0%, #dde8f8 100%)", minHeight: "480px" }}
           >
             <img
               src={RINA_HERO_IMAGE}
               alt="Rina"
-              className="w-full h-auto object-contain object-bottom"
-              style={{ maxHeight: "400px", marginBottom: "-2px" }}
+              className="object-contain"
+              style={{ width: '100%', height: 'auto', minHeight: '420px', marginBottom: '-2px' }}
             />
           </div>
           {/* Right: sign-in content */}
@@ -224,14 +224,17 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
       style={{ background: "linear-gradient(135deg, #ede9f8 0%, #dde8f8 50%, #e4ecf8 100%)" }}
     >
       {/* Rina character -- FULL HEIGHT on the LEFT, outside the white card, pointing right */}
-      <div className="hidden lg:flex flex-col justify-end items-center w-[180px] xl:w-[220px] shrink-0 pl-3 pb-0 pointer-events-none select-none">
+      <div className="hidden lg:flex flex-col justify-end items-center w-[200px] xl:w-[240px] shrink-0 pl-3 pb-0 pointer-events-none select-none">
         <img
           src={RINA_HERO_IMAGE}
           alt="Rina"
-          className="w-full h-auto object-contain"
+          className="object-contain"
           style={{
-            maxWidth: "210px",
-            marginBottom: "-4px",
+            width: '100%',
+            height: 'auto',
+            minHeight: '400px',
+            maxWidth: '240px',
+            marginBottom: '-4px',
             filter: "drop-shadow(0 20px 40px rgba(100,60,200,0.15))",
           }}
         />
@@ -254,8 +257,13 @@ export default function RinaLayout({ children }: { children: ReactNode }) {
 
           {/* Rina face avatar row */}
           <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-violet-200 shrink-0 bg-violet-50 flex items-center justify-center">
-              <img src={RINA_AVATAR_IMAGE} alt="Rina" className="h-full w-full object-contain" />
+            <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-violet-200 shrink-0 bg-violet-50">
+              <img
+                src={RINA_AVATAR_IMAGE}
+                alt="Rina"
+                className="w-full h-full object-cover"
+                style={{ objectPosition: 'top center', transform: 'scale(1.4)', transformOrigin: 'top center' }}
+              />
             </div>
             <div>
               <div className="text-xs font-semibold text-slate-700">Agent Rina</div>

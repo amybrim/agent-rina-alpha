@@ -153,11 +153,12 @@ export default function Onboarding() {
         <div className="w-full max-w-2xl">
           <div className="flex items-start gap-8">
             {/* Rina illustration */}
-            <div className="hidden md:block flex-shrink-0 w-48">
+            <div className="hidden md:block flex-shrink-0 w-56 self-end">
               <img
                 src={RINA_HERO_IMAGE}
                 alt="Rina"
                 className="w-full object-contain drop-shadow-lg"
+                style={{ minHeight: '400px', height: 'auto' }}
               />
             </div>
 
@@ -219,7 +220,8 @@ export default function Onboarding() {
             <img
               src={RINA_HERO_IMAGE}
               alt="Rina working"
-              className="w-40 object-contain drop-shadow-lg"
+              className="object-contain drop-shadow-lg"
+              style={{ width: '200px', minHeight: '400px', height: 'auto' }}
             />
 
             <div className="bg-white rounded-2xl shadow-lg px-8 py-6 w-full">
@@ -262,11 +264,12 @@ export default function Onboarding() {
         <div className="w-full max-w-3xl">
           <div className="flex items-start gap-6">
             {/* Rina illustration */}
-            <div className="hidden md:block flex-shrink-0 w-44">
+            <div className="hidden md:block flex-shrink-0 w-56 self-end">
               <img
                 src={RINA_HERO_IMAGE}
                 alt="Rina"
                 className="w-full object-contain drop-shadow-lg"
+                style={{ minHeight: '400px', height: 'auto' }}
               />
             </div>
 
@@ -335,11 +338,12 @@ export default function Onboarding() {
         <div className="w-full max-w-2xl">
           <div className="flex items-start gap-6">
             {/* Rina illustration */}
-            <div className="hidden md:block flex-shrink-0 w-40">
+            <div className="hidden md:block flex-shrink-0 w-56 self-end">
               <img
                 src={RINA_HERO_IMAGE}
                 alt="Rina"
                 className="w-full object-contain drop-shadow-lg"
+                style={{ minHeight: '400px', height: 'auto' }}
               />
             </div>
 

@@ -66,12 +66,12 @@ export default function Home() {
       <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #e8e4f8 0%, #dde8f8 40%, #e4ecf8 100%)' }}>
         <div className="container relative flex flex-col lg:flex-row items-center gap-0 py-16 lg:py-24">
           {/* Rina character — full height, standing beside the copy */}
-          <div className="hidden lg:flex flex-col justify-end items-center shrink-0 w-[260px] self-end">
+          <div className="hidden lg:flex flex-col justify-end items-center shrink-0 w-[320px] self-end">
             <img
               src={RINA_HERO_IMAGE}
               alt="Rina"
-              className="w-full max-w-[240px] h-auto object-contain drop-shadow-[0_30px_40px_rgba(100,60,200,0.22)]"
-              style={{ marginBottom: '-4px' }}
+              className="object-contain drop-shadow-[0_30px_40px_rgba(100,60,200,0.22)]"
+              style={{ width: '100%', height: 'auto', minHeight: '400px', maxWidth: '320px', marginBottom: '-4px' }}
             />
           </div>
           {/* Copy */}
